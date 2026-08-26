@@ -1,0 +1,8 @@
+{
+  "name": "Remix FinanFlow - Controle Financeiro 2.0",
+  "description": "Aplicativo moderno de controle financeiro mensal com metas percentuais, gestão de renda, despesas, investimentos e comparativo histórico.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
