@@ -69,17 +69,27 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // ——— Carregar dados do InsForge ao logar ———
+  // ——— Carregar dados do InsForge ao logar / limpar ao sair ———
   useEffect(() => {
-    if (!user) return;
+    // Quando não há usuário, limpar TUDO para garantir isolamento total
+    if (!user) {
+      setMonths([]);
+      setActiveMonthId('');
+      return;
+    }
+
+    // Limpar dados do usuário anterior ANTES de buscar os novos
+    setMonths([]);
+    setActiveMonthId('');
     setDbLoading(true);
+
     fetchUserMonths(user.id)
       .then((data) => {
         if (data.length > 0) {
           setMonths(data);
           setActiveMonthId(data[data.length - 1].id);
         } else {
-          // Criar mês atual para novo usuário
+          // Novo usuário sem dados — criar mês atual
           const now = new Date();
           const newMonth = createNewMonthData(now.getFullYear(), now.getMonth() + 1, DEFAULT_TARGETS);
           setMonths([newMonth]);
@@ -89,7 +99,8 @@ export default function App() {
       })
       .catch(console.error)
       .finally(() => setDbLoading(false));
-  }, [user]);
+  }, [user?.id]); // Depende APENAS do ID — muda quando o usuário muda
+
 
   // Current active month object
   const currentMonth = useMemo(() => {

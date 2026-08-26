@@ -12,13 +12,12 @@ import {
   RotateCcw,
   MoreVertical,
   Calendar,
-  LogOut,
   Wallet,
   User,
 } from 'lucide-react';
 import { ActiveTab, MonthData } from '../types';
 import type { InsforgeUser } from '../lib/insforge';
-import { useAuth } from '../contexts/AuthContext';
+import { UserAccountModal } from './UserAccountModal';
 import { parseMonthId } from '../utils/formatters';
 
 interface HeaderProps {
@@ -50,8 +49,8 @@ export const Header: React.FC<HeaderProps> = ({
   onResetDemo,
   user,
 }) => {
-  const { signOut } = useAuth();
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
 
   // Close tools menu on click outside
@@ -108,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Mobile Action buttons quick access */}
-            <div className="flex items-center gap-1.5 md:hidden">
+            <div className="flex items-center gap-2 md:hidden">
               <button
                 id="mobile-quick-add-tx"
                 onClick={onOpenTransactionModal}
@@ -117,6 +116,17 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Plus className="w-4 h-4" />
               </button>
+              {/* Botão de Perfil Mobile */}
+              {user && (
+                <button
+                  id="mobile-profile-btn"
+                  onClick={() => setAccountModalOpen(true)}
+                  className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20"
+                  title="Minha conta"
+                >
+                  {user.profile?.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || <User className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </div>
           </div>
 
@@ -251,29 +261,35 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* User Avatar + Logout */}
+            {/* User Avatar + Account Button - Desktop */}
             {user && (
-              <div className="flex items-center gap-2 pl-1 border-l border-slate-800 ml-1">
-                <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold">
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-800 ml-1">
+                <button
+                  id="desktop-profile-btn"
+                  onClick={() => setAccountModalOpen(true)}
+                  className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl transition-all group"
+                  title="Minha conta"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white text-[10px] font-bold">
                     {user.profile?.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || <User className="w-3 h-3" />}
                   </div>
-                  <span className="text-xs text-slate-400 max-w-[100px] truncate">
-                    {user.profile?.name || user.email}
+                  <span className="text-xs text-slate-400 group-hover:text-slate-200 max-w-[100px] truncate transition">
+                    {user.profile?.name || user.email?.split('@')[0]}
                   </span>
-                </div>
-                <button
-                  id="logout-btn"
-                  onClick={signOut}
-                  title="Sair da conta"
-                  className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
                 </button>
               </div>
             )}
           </div>
         </div>
+
+        {/* Modal de Conta */}
+        {user && (
+          <UserAccountModal
+            isOpen={accountModalOpen}
+            onClose={() => setAccountModalOpen(false)}
+            user={user}
+          />
+        )}
 
         {/* Bottom Bar: Tab Navigation */}
         <div className="flex items-center gap-2 overflow-x-auto py-2.5 no-scrollbar">
