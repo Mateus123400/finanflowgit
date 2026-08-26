@@ -33,3 +33,18 @@ pnpm-debug.log*
 # Cache
 .cache/
 .parcel-cache/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf
