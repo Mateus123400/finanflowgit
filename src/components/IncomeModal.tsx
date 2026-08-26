@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Briefcase, CheckCircle2, Sparkles } from 'lucide-react';
-import { IncomeEntry } from '../types';
+import {
+  X,
+  DollarSign,
+  Briefcase,
+  CheckCircle2,
+  Sparkles,
+  Zap,
+  TrendingUp,
+  Plus,
+} from 'lucide-react';
+import { IncomeActivity, IncomeEntry, IncomeNature } from '../types';
 import { getTodayDateInputString } from '../utils/formatters';
 
 interface IncomeModalProps {
@@ -9,6 +18,8 @@ interface IncomeModalProps {
   onSave: (income: Omit<IncomeEntry, 'id'>, editId?: string) => void;
   initialData?: IncomeEntry | null;
   monthId: string;
+  activities?: IncomeActivity[];
+  onOpenActivitiesModal?: () => void;
 }
 
 export const IncomeModal: React.FC<IncomeModalProps> = ({
@@ -17,11 +28,15 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
   onSave,
   initialData,
   monthId,
+  activities = [],
+  onOpenActivitiesModal,
 }) => {
   const [description, setDescription] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [date, setDate] = useState('');
   const [sourceType, setSourceType] = useState<IncomeEntry['sourceType']>('salario');
+  const [incomeNature, setIncomeNature] = useState<IncomeNature>('active');
+  const [activityId, setActivityId] = useState<string>('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -31,6 +46,8 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
         setAmountStr(String(initialData.amount || ''));
         setDate(initialData.date || `${monthId}-05`);
         setSourceType(initialData.sourceType || 'salario');
+        setIncomeNature(initialData.incomeNature || (initialData.sourceType === 'dividendos' ? 'passive' : 'active'));
+        setActivityId(initialData.activityId || '');
       } else {
         setDescription('');
         setAmountStr('');
@@ -38,12 +55,24 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
         const defaultDate = today.startsWith(monthId) ? today : `${monthId}-05`;
         setDate(defaultDate);
         setSourceType('salario');
+        setIncomeNature('active');
+        setActivityId('');
       }
       setError('');
     }
   }, [isOpen, initialData, monthId]);
 
   if (!isOpen) return null;
+
+  const handleSelectActivity = (actId: string) => {
+    setActivityId(actId);
+    if (actId) {
+      const selected = activities.find((a) => a.id === actId);
+      if (selected) {
+        setIncomeNature(selected.defaultType);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,24 +93,30 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
         amount: Math.round(numAmount * 100) / 100,
         date: date || `${monthId}-05`,
         sourceType,
+        incomeNature,
+        activityId: activityId || undefined,
       },
       initialData?.id
     );
     onClose();
   };
 
+  // Filtrar atividades ativas ou a selecionada atualmente
+  const selectableActivities = activities.filter((a) => a.isActive || a.id === activityId);
+
   const quickPresets = [
-    { desc: 'Salário Principal', type: 'salario' as const },
-    { desc: 'Freelance / Projeto Extra', type: 'freelance' as const },
-    { desc: 'Dividendos & Rendimentos', type: 'dividendos' as const },
-    { desc: 'Venda de Itens / Bônus', type: 'renda_extra' as const },
+    { desc: 'Salário Principal', type: 'salario' as const, nature: 'active' as const },
+    { desc: 'Freelance / Projeto Extra', type: 'freelance' as const, nature: 'active' as const },
+    { desc: 'Dividendos & Rendimentos', type: 'dividendos' as const, nature: 'passive' as const },
+    { desc: 'Aluguel Recebido', type: 'renda_extra' as const, nature: 'passive' as const },
+    { desc: 'Venda de Produtos / Infoproduto', type: 'renda_extra' as const, nature: 'active' as const },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         id="income-modal-container"
-        className="bg-slate-900 border border-slate-800 text-slate-100 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="bg-slate-900 border border-slate-800 text-slate-100 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-slate-900/90">
@@ -91,9 +126,9 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">
-                {initialData ? 'Editar Renda' : 'Adicionar Fonte de Renda'}
+                {initialData ? 'Editar Renda' : 'Adicionar Entrada de Renda'}
               </h2>
-              <p className="text-xs text-slate-400">Entrada financeira do mês</p>
+              <p className="text-xs text-slate-400">Classifique como Renda Ativa ou Passiva</p>
             </div>
           </div>
           <button
@@ -106,12 +141,51 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
           {error && (
             <div className="p-3 text-sm text-rose-300 bg-rose-950/40 border border-rose-800/50 rounded-xl">
               {error}
             </div>
           )}
+
+          {/* Seletor Renda Ativa vs Passiva */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              Classificação da Renda *
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIncomeNature('active')}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-semibold text-xs transition-all ${
+                  incomeNature === 'active'
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-200 shadow-sm shadow-blue-500/20'
+                    : 'bg-slate-800/50 border-slate-750 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Zap className="w-4 h-4 text-blue-400" />
+                <span>Renda Ativa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIncomeNature('passive')}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl border font-semibold text-xs transition-all ${
+                  incomeNature === 'passive'
+                    ? 'bg-emerald-600/20 border-emerald-500 text-emerald-200 shadow-sm shadow-emerald-500/20'
+                    : 'bg-slate-800/50 border-slate-750 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span>Renda Passiva</span>
+              </button>
+            </div>
+            <span className="text-[11px] text-slate-500 mt-1 block">
+              {incomeNature === 'active'
+                ? '💼 Fruto do seu trabalho direto (salário, consultoria, vendas)'
+                : '🌱 Ganhos automáticos e patrimoniais (aluguéis, dividendos, juros)'}
+            </span>
+          </div>
 
           {/* Quick Presets */}
           {!initialData && (
@@ -128,6 +202,7 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
                     onClick={() => {
                       setDescription(preset.desc);
                       setSourceType(preset.type);
+                      setIncomeNature(preset.nature);
                     }}
                     className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors"
                   >
@@ -148,10 +223,42 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Salário CLT, Freelance Design, Dividendos..."
+              placeholder="Ex: Salário CLT, Freelance Design, Dividendos MXRF11..."
               required
               className="w-full px-3.5 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Vínculo com Atividade de Renda */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-slate-300">
+                Atividade de Renda (opcional)
+              </label>
+              {onOpenActivitiesModal && (
+                <button
+                  type="button"
+                  onClick={onOpenActivitiesModal}
+                  className="text-[11px] text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5"
+                >
+                  <Plus className="w-3 h-3" />
+                  Gerenciar Atividades
+                </button>
+              )}
+            </div>
+            <select
+              id="income-activity-select"
+              value={activityId}
+              onChange={(e) => handleSelectActivity(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+            >
+              <option value="">Nenhuma atividade vinculada</option>
+              {selectableActivities.map((act) => (
+                <option key={act.id} value={act.id}>
+                  {act.name} {act.defaultType === 'passive' ? '(Passiva)' : '(Ativa)'} {!act.isActive ? '[Arquivada]' : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Amount and Date */}
@@ -195,7 +302,7 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
           {/* Source Type */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1.5">
-              Tipo de Renda
+              Tipo / Canal de Recebimento
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
@@ -245,3 +352,4 @@ export const IncomeModal: React.FC<IncomeModalProps> = ({
     </div>
   );
 };
+

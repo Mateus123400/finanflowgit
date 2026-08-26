@@ -7,9 +7,12 @@ import {
   MonthData,
   TransactionEntry,
   Reward,
+  IncomeActivity,
+  AssetItem,
+  LiabilityItem,
 } from './types';
 import { createNewMonthData, exportDataAsJSON, exportMonthToCSV } from './utils/storage';
-import { calculateMonthSummary } from './utils/calculations';
+import { calculateMonthSummary, calculateNetWorthSummary } from './utils/calculations';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { TransactionsView } from './components/TransactionsView';
@@ -22,6 +25,8 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { AuthPage } from './components/AuthPage';
 import { AnnualView } from './components/AnnualView';
 import { RewardsView } from './components/RewardsView';
+import { PatrimonioView } from './components/PatrimonioView';
+import { IncomeActivitiesModal } from './components/IncomeActivitiesModal';
 import { CATEGORIES_CONFIG, DEFAULT_TARGETS } from './utils/constants';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
@@ -35,6 +40,15 @@ import {
   saveTargets,
   fetchRewards,
   deleteMonth,
+  fetchIncomeActivities,
+  upsertIncomeActivity,
+  toggleArchiveIncomeActivity,
+  fetchAssets,
+  upsertAsset,
+  deleteAsset,
+  fetchLiabilities,
+  upsertLiability,
+  deleteLiability,
 } from './lib/db';
 
 export default function App() {
@@ -44,7 +58,6 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('insforge_code') || params.has('insforge_status')) {
-      // Limpar query string após callback OAuth
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -52,6 +65,9 @@ export default function App() {
   // ——— Estado principal ———
   const [months, setMonths] = useState<MonthData[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [activities, setActivities] = useState<IncomeActivity[]>([]);
+  const [assets, setAssets] = useState<AssetItem[]>([]);
+  const [liabilities, setLiabilities] = useState<LiabilityItem[]>([]);
   const [activeMonthId, setActiveMonthId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [txCategoryFilter, setTxCategoryFilter] = useState<CategoryId | 'all'>('all');
@@ -64,6 +80,7 @@ export default function App() {
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [editingIncome, setEditingIncome] = useState<IncomeEntry | null>(null);
   const [isNewMonthModalOpen, setIsNewMonthModalOpen] = useState(false);
+  const [isActivitiesModalOpen, setIsActivitiesModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'transaction' | 'income';
     item: TransactionEntry | IncomeEntry;
@@ -78,26 +95,37 @@ export default function App() {
 
   // ——— Carregar dados do InsForge ao logar / limpar ao sair ———
   useEffect(() => {
-    // Quando não há usuário, limpar TUDO para garantir isolamento total
     if (!user) {
       setMonths([]);
       setRewards([]);
+      setActivities([]);
+      setAssets([]);
+      setLiabilities([]);
       setActiveMonthId('');
       return;
     }
 
-    // Limpar dados do usuário anterior ANTES de buscar os novos
     setMonths([]);
     setRewards([]);
+    setActivities([]);
+    setAssets([]);
+    setLiabilities([]);
     setActiveMonthId('');
     setDbLoading(true);
 
     Promise.all([
       fetchUserMonths(user.id),
       fetchRewards(user.id),
+      fetchIncomeActivities(user.id),
+      fetchAssets(user.id),
+      fetchLiabilities(user.id),
     ])
-      .then(([monthsData, rewardsData]) => {
+      .then(([monthsData, rewardsData, activitiesData, assetsData, liabilitiesData]) => {
         setRewards(rewardsData);
+        setActivities(activitiesData);
+        setAssets(assetsData);
+        setLiabilities(liabilitiesData);
+
         if (monthsData.length > 0) {
           setMonths(monthsData);
           setActiveMonthId(monthsData[monthsData.length - 1].id);
@@ -112,8 +140,7 @@ export default function App() {
       })
       .catch(console.error)
       .finally(() => setDbLoading(false));
-  }, [user?.id]); // Depende APENAS do ID — muda quando o usuário muda
-
+  }, [user?.id]);
 
   // Current active month object
   const currentMonth = useMemo(() => {
@@ -123,8 +150,12 @@ export default function App() {
 
   const monthSummary = useMemo(() => {
     if (!currentMonth) return null;
-    return calculateMonthSummary(currentMonth);
-  }, [currentMonth]);
+    return calculateMonthSummary(currentMonth, activities);
+  }, [currentMonth, activities]);
+
+  const netWorthSummary = useMemo(() => {
+    return calculateNetWorthSummary(assets, liabilities);
+  }, [assets, liabilities]);
 
   // ——— CRUD: Transactions ———
   const handleSaveTransaction = async (txData: Omit<TransactionEntry, 'id'>, editId?: string) => {
@@ -144,45 +175,10 @@ export default function App() {
     if (user) {
       await upsertTransaction(user.id, currentMonth.id, tx).catch(console.error);
     }
-
-    showToast(
-      editId
-        ? 'Lançamento atualizado com sucesso!'
-        : `Lançamento adicionado em ${CATEGORIES_CONFIG[txData.categoryId]?.name || 'Categoria'}!`
-    );
+    showToast(editId ? 'Lançamento atualizado com sucesso!' : 'Lançamento adicionado!');
   };
 
-  const handleDeleteConfirmed = async () => {
-    if (!deleteTarget) return;
-
-    if (deleteTarget.type === 'transaction') {
-      const tx = deleteTarget.item as TransactionEntry;
-      setMonths((prev) =>
-        prev.map((m) =>
-          m.id !== currentMonth.id
-            ? m
-            : { ...m, transactions: (m.transactions || []).filter((t) => t.id !== tx.id), updatedAt: new Date().toISOString() }
-        )
-      );
-      if (user) await deleteTransaction(tx.id).catch(console.error);
-      showToast('Lançamento removido.');
-    } else {
-      const inc = deleteTarget.item as IncomeEntry;
-      setMonths((prev) =>
-        prev.map((m) =>
-          m.id !== currentMonth.id
-            ? m
-            : { ...m, incomes: (m.incomes || []).filter((i) => i.id !== inc.id), updatedAt: new Date().toISOString() }
-        )
-      );
-      if (user) await deleteIncome(inc.id).catch(console.error);
-      showToast('Fonte de renda removida.');
-    }
-
-    setDeleteTarget(null);
-  };
-
-  // ——— CRUD: Incomes ———
+  // ——— CRUD: Income ———
   const handleSaveIncome = async (incomeData: Omit<IncomeEntry, 'id'>, editId?: string) => {
     const newId = editId ?? `inc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const income: IncomeEntry = { id: newId, ...incomeData };
@@ -200,56 +196,183 @@ export default function App() {
     if (user) {
       await upsertIncome(user.id, currentMonth.id, income).catch(console.error);
     }
-
-    showToast(editId ? 'Fonte de renda atualizada!' : 'Nova renda adicionada com sucesso!');
+    showToast(editId ? 'Renda atualizada com sucesso!' : 'Fonte de renda adicionada!');
   };
 
-  // ——— Month Management ———
+  // ——— CRUD: Atividades de Renda ———
+  const handleSaveActivity = async (activity: IncomeActivity) => {
+    const exists = activities.some((a) => a.id === activity.id);
+    const updatedList = exists
+      ? activities.map((a) => (a.id === activity.id ? activity : a))
+      : [...activities, activity];
+
+    setActivities(updatedList);
+
+    if (user) {
+      await upsertIncomeActivity(user.id, activity).catch(console.error);
+    }
+    showToast(exists ? 'Atividade atualizada com sucesso!' : 'Nova atividade cadastrada!');
+  };
+
+  const handleToggleArchiveActivity = async (activityId: string, isActive: boolean) => {
+    setActivities((prev) =>
+      prev.map((a) => (a.id === activityId ? { ...a, isActive } : a))
+    );
+
+    await toggleArchiveIncomeActivity(activityId, isActive).catch(console.error);
+    showToast(isActive ? 'Atividade reativada!' : 'Atividade arquivada com sucesso!');
+  };
+
+  // ——— CRUD: Ativos ———
+  const handleSaveAsset = async (asset: AssetItem) => {
+    const exists = assets.some((a) => a.id === asset.id);
+    const updatedList = exists
+      ? assets.map((a) => (a.id === asset.id ? asset : a))
+      : [...assets, asset];
+
+    setAssets(updatedList);
+
+    if (user) {
+      await upsertAsset(user.id, asset).catch(console.error);
+    }
+    showToast(exists ? 'Ativo atualizado com sucesso!' : 'Ativo patrimonial adicionado!');
+  };
+
+  const handleDeleteAsset = async (assetId: string) => {
+    setAssets((prev) => prev.filter((a) => a.id !== assetId));
+    await deleteAsset(assetId).catch(console.error);
+    showToast('Ativo removido com sucesso!');
+  };
+
+  // ——— CRUD: Passivos ———
+  const handleSaveLiability = async (liability: LiabilityItem) => {
+    const exists = liabilities.some((l) => l.id === liability.id);
+    const updatedList = exists
+      ? liabilities.map((l) => (l.id === liability.id ? liability : l))
+      : [...liabilities, liability];
+
+    setLiabilities(updatedList);
+
+    if (user) {
+      await upsertLiability(user.id, liability).catch(console.error);
+    }
+    showToast(exists ? 'Passivo atualizado com sucesso!' : 'Passivo/Dívida adicionada!');
+  };
+
+  const handleDeleteLiability = async (liabilityId: string) => {
+    setLiabilities((prev) => prev.filter((l) => l.id !== liabilityId));
+    await deleteLiability(liabilityId).catch(console.error);
+    showToast('Passivo removido com sucesso!');
+  };
+
+  // ——— Exclusões confirmadas (lançamentos / rendas) ———
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === 'transaction') {
+      const txId = deleteTarget.item.id;
+      setMonths((prevMonths) =>
+        prevMonths.map((m) => {
+          if (m.id !== currentMonth.id) return m;
+          return {
+            ...m,
+            transactions: (m.transactions || []).filter((t) => t.id !== txId),
+            updatedAt: new Date().toISOString(),
+          };
+        })
+      );
+      await deleteTransaction(txId).catch(console.error);
+      showToast('Lançamento excluído com sucesso.');
+    } else {
+      const incomeId = deleteTarget.item.id;
+      setMonths((prevMonths) =>
+        prevMonths.map((m) => {
+          if (m.id !== currentMonth.id) return m;
+          return {
+            ...m,
+            incomes: (m.incomes || []).filter((i) => i.id !== incomeId),
+            updatedAt: new Date().toISOString(),
+          };
+        })
+      );
+      await deleteIncome(incomeId).catch(console.error);
+      showToast('Fonte de renda excluída com sucesso.');
+    }
+
+    setDeleteTarget(null);
+  };
+
+  // ——— Criar Novo Mês ———
   const handleCreateMonth = async (
     year: number,
     month: number,
     duplicateFromMonthId?: string,
-    copyRecurringStructure = false
+    copyRecurringStructure?: boolean
   ) => {
-    const sourceMonth = duplicateFromMonthId ? months.find((m) => m.id === duplicateFromMonthId) : undefined;
-    const sourceTargets = sourceMonth ? sourceMonth.targets : DEFAULT_TARGETS;
-    const newMonth = createNewMonthData(year, month, sourceTargets, copyRecurringStructure, sourceMonth);
+    let sourceMonth: MonthData | undefined;
+    if (duplicateFromMonthId) {
+      sourceMonth = months.find((m) => m.id === duplicateFromMonthId);
+    }
 
-    setMonths((prev) => [...prev, newMonth]);
+    const newMonth = createNewMonthData(
+      year,
+      month,
+      sourceMonth ? sourceMonth.targets : DEFAULT_TARGETS,
+      !!copyRecurringStructure,
+      sourceMonth
+    );
+
+    const updatedMonths = [...months, newMonth].sort((a, b) => a.id.localeCompare(b.id));
+    setMonths(updatedMonths);
     setActiveMonthId(newMonth.id);
     setActiveTab('dashboard');
 
     if (user) {
       await upsertMonth(user.id, newMonth).catch(console.error);
     }
-
-    showToast(duplicateFromMonthId ? 'Novo mês criado com a estrutura e metas duplicadas!' : 'Novo mês criado com sucesso!');
+    showToast(`Mês criado com sucesso!`);
   };
 
-  // ——— Target Updates ———
-  const handleSaveTargetsForMonth = async (newTargets: CategoryTargets) => {
-    setMonths((prev) =>
-      prev.map((m) => (m.id === currentMonth.id ? { ...m, targets: newTargets } : m))
+  // ——— Salvar Metas do Mês ———
+  const handleSaveTargetsForMonth = async (monthId: string, targets: CategoryTargets) => {
+    setMonths((prevMonths) =>
+      prevMonths.map((m) => {
+        if (m.id !== monthId) return m;
+        return { ...m, targets, updatedAt: new Date().toISOString() };
+      })
     );
-    if (user) await saveTargets(user.id, currentMonth.id, newTargets).catch(console.error);
-  };
 
-  const handleApplyTargetsToAllMonths = async (newTargets: CategoryTargets) => {
-    setMonths((prev) => prev.map((m) => ({ ...m, targets: { ...newTargets } })));
     if (user) {
-      await Promise.all(months.map((m) => saveTargets(user.id, m.id, newTargets))).catch(console.error);
+      await saveTargets(user.id, monthId, targets).catch(console.error);
     }
+    showToast('Metas do mês atualizadas!');
   };
 
-  const handleDuplicateStructureFromMonth = async (sourceMonthId: string) => {
-    const source = months.find((m) => m.id === sourceMonthId);
-    if (source) {
-      const newTargets = { ...source.targets };
-      setMonths((prev) =>
-        prev.map((m) => (m.id === currentMonth.id ? { ...m, targets: newTargets } : m))
-      );
-      if (user) await saveTargets(user.id, currentMonth.id, newTargets).catch(console.error);
+  // ——— Aplicar Metas a Todos os Meses ———
+  const handleApplyTargetsToAllMonths = async (targets: CategoryTargets) => {
+    setMonths((prevMonths) =>
+      prevMonths.map((m) => ({
+        ...m,
+        targets,
+        updatedAt: new Date().toISOString(),
+      }))
+    );
+
+    if (user) {
+      await Promise.all(
+        months.map((m) => saveTargets(user.id, m.id, targets))
+      ).catch(console.error);
     }
+    showToast('Metas aplicadas a todos os meses com sucesso!');
+  };
+
+  // ——— Duplicar Estrutura de Metas ———
+  const handleDuplicateStructureFromMonth = async (sourceMonthId: string, targetMonthId: string) => {
+    const sourceMonth = months.find((m) => m.id === sourceMonthId);
+    if (!sourceMonth) return;
+
+    await handleSaveTargetsForMonth(targetMonthId, sourceMonth.targets);
+    showToast(`Estrutura duplicada com sucesso!`);
   };
 
   const handleGoToTransactionsWithCategory = (category?: CategoryId) => {
@@ -259,18 +382,15 @@ export default function App() {
 
   // ——— Deletar Mês ———
   const handleDeleteMonth = async (monthToDelete: MonthData) => {
-    // Não permite apagar o único mês existente
     if (months.length <= 1) {
       showToast('Não é possível apagar o único mês existente.', 'info');
       setDeleteMonthTarget(null);
       return;
     }
 
-    // Atualiza estado local: remove o mês e redireciona para o último disponível
     const remaining = months.filter((m) => m.id !== monthToDelete.id);
     setMonths(remaining);
 
-    // Se o mês apagado era o ativo, vai para o último disponível
     if (activeMonthId === monthToDelete.id) {
       setActiveMonthId(remaining[remaining.length - 1].id);
       setActiveTab('dashboard');
@@ -287,17 +407,15 @@ export default function App() {
   // ——— TELA DE LOADING ———
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        <p className="text-slate-400 text-sm font-medium">Carregando FinanFlow...</p>
       </div>
     );
   }
 
-  // ——— TELA DE AUTH ———
+  // ——— TELA DE AUTENTICAÇÃO ———
   if (!user) {
-    // O AuthContext detecta automaticamente a sessão via onAuthStateChange.
-    // Para email/senha e OAuth (Google), não é necessário fazer reload —
-    // o listener dispara e o React re-renderiza automaticamente.
     return <AuthPage onAuthenticated={() => {}} />;
   }
 
@@ -333,6 +451,7 @@ export default function App() {
         onExportJSON={() => exportDataAsJSON(months)}
         onExportCSV={() => exportMonthToCSV(currentMonth)}
         onResetDemo={() => {}}
+        onOpenActivitiesModal={() => setIsActivitiesModalOpen(true)}
         user={user}
       />
 
@@ -341,6 +460,8 @@ export default function App() {
           <DashboardView
             currentMonth={currentMonth}
             summary={monthSummary}
+            activities={activities}
+            netWorthSummary={netWorthSummary}
             onOpenTransactionModal={(cat) => {
               setEditingTransaction(null);
               setDefaultTxCategory(cat || 'despesas');
@@ -352,12 +473,15 @@ export default function App() {
             }}
             onGoToTargets={() => setActiveTab('targets')}
             onGoToTransactions={handleGoToTransactionsWithCategory}
+            onGoToPatrimonio={() => setActiveTab('patrimonio')}
+            onOpenActivitiesModal={() => setIsActivitiesModalOpen(true)}
           />
         )}
 
         {activeTab === 'transactions' && (
           <TransactionsView
             currentMonth={currentMonth}
+            activities={activities}
             initialFilterCategory={txCategoryFilter}
             onOpenAddTransaction={(cat) => {
               setEditingTransaction(null);
@@ -379,6 +503,18 @@ export default function App() {
               setIsIncomeModalOpen(true);
             }}
             onOpenDeleteIncome={(inc) => setDeleteTarget({ type: 'income', item: inc })}
+            onOpenActivitiesModal={() => setIsActivitiesModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'patrimonio' && (
+          <PatrimonioView
+            assets={assets}
+            liabilities={liabilities}
+            onSaveAsset={handleSaveAsset}
+            onDeleteAsset={handleDeleteAsset}
+            onSaveLiability={handleSaveLiability}
+            onDeleteLiability={handleDeleteLiability}
           />
         )}
 
@@ -433,6 +569,8 @@ export default function App() {
         initialData={editingTransaction}
         defaultCategoryId={defaultTxCategory}
         monthId={currentMonth.id}
+        activities={activities}
+        onOpenActivitiesModal={() => setIsActivitiesModalOpen(true)}
       />
 
       <IncomeModal
@@ -441,6 +579,16 @@ export default function App() {
         onSave={handleSaveIncome}
         initialData={editingIncome}
         monthId={currentMonth.id}
+        activities={activities}
+        onOpenActivitiesModal={() => setIsActivitiesModalOpen(true)}
+      />
+
+      <IncomeActivitiesModal
+        isOpen={isActivitiesModalOpen}
+        onClose={() => setIsActivitiesModalOpen(false)}
+        activities={activities}
+        onSaveActivity={handleSaveActivity}
+        onToggleArchive={handleToggleArchiveActivity}
       />
 
       <NewMonthModal

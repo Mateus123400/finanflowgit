@@ -13,14 +13,20 @@ import {
   FileSpreadsheet,
   CheckCircle,
   Tag,
+  Zap,
+  TrendingUp,
+  Briefcase,
+  Clock,
+  XCircle,
 } from 'lucide-react';
-import { CategoryId, IncomeEntry, MonthData, TransactionEntry } from '../types';
+import { CategoryId, IncomeActivity, IncomeEntry, MonthData, TransactionEntry } from '../types';
 import { CATEGORIES_CONFIG, CATEGORY_IDS } from '../utils/constants';
-import { formatCurrency, formatDateBR } from '../utils/formatters';
+import { formatCurrency, formatDateBR, formatPercent } from '../utils/formatters';
 import { CategoryIcon } from './CategoryIcon';
 
 interface TransactionsViewProps {
   currentMonth: MonthData;
+  activities?: IncomeActivity[];
   initialFilterCategory?: CategoryId | 'all';
   onOpenAddTransaction: (defaultCategory?: CategoryId) => void;
   onOpenEditTransaction: (transaction: TransactionEntry) => void;
@@ -28,10 +34,12 @@ interface TransactionsViewProps {
   onOpenAddIncome: () => void;
   onOpenEditIncome: (income: IncomeEntry) => void;
   onOpenDeleteIncome: (income: IncomeEntry) => void;
+  onOpenActivitiesModal?: () => void;
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({
   currentMonth,
+  activities = [],
   initialFilterCategory = 'all',
   onOpenAddTransaction,
   onOpenEditTransaction,
@@ -39,10 +47,12 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenAddIncome,
   onOpenEditIncome,
   onOpenDeleteIncome,
+  onOpenActivitiesModal,
 }) => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<CategoryId | 'all'>(
     initialFilterCategory
   );
+  const [selectedActivityFilter, setSelectedActivityFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
   const [activeSection, setActiveSection] = useState<'all' | 'transactions' | 'incomes'>('all');
@@ -50,16 +60,24 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const incomes = currentMonth.incomes || [];
   const transactions = currentMonth.transactions || [];
 
+  const activityMap = useMemo(() => {
+    const map = new Map<string, IncomeActivity>();
+    activities.forEach((a) => map.set(a.id, a));
+    return map;
+  }, [activities]);
+
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       const matchCat =
         selectedCategoryFilter === 'all' || tx.categoryId === selectedCategoryFilter;
+      const matchActivity =
+        selectedActivityFilter === 'all' || tx.activityId === selectedActivityFilter;
       const matchSearch =
         !searchQuery.trim() ||
         tx.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (tx.notes && tx.notes.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchCat && matchSearch;
+      return matchCat && matchActivity && matchSearch;
     }).sort((a, b) => {
       if (sortBy === 'date_desc') return (b.date || '').localeCompare(a.date || '');
       if (sortBy === 'date_asc') return (a.date || '').localeCompare(b.date || '');
@@ -67,15 +85,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       if (sortBy === 'amount_asc') return a.amount - b.amount;
       return 0;
     });
-  }, [transactions, selectedCategoryFilter, searchQuery, sortBy]);
+  }, [transactions, selectedCategoryFilter, selectedActivityFilter, searchQuery, sortBy]);
 
   // Filtered incomes
   const filteredIncomes = useMemo(() => {
     return incomes.filter((inc) => {
+      const matchActivity =
+        selectedActivityFilter === 'all' || inc.activityId === selectedActivityFilter;
       const matchSearch =
         !searchQuery.trim() ||
         inc.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchSearch;
+      return matchActivity && matchSearch;
     }).sort((a, b) => {
       if (sortBy === 'date_desc') return (b.date || '').localeCompare(a.date || '');
       if (sortBy === 'date_asc') return (a.date || '').localeCompare(b.date || '');
@@ -83,7 +103,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       if (sortBy === 'amount_asc') return a.amount - b.amount;
       return 0;
     });
-  }, [incomes, searchQuery, sortBy]);
+  }, [incomes, selectedActivityFilter, searchQuery, sortBy]);
 
   const totalFilteredTxAmount = filteredTransactions.reduce((acc, t) => acc + t.amount, 0);
   const totalIncomeAmount = incomes.reduce((acc, i) => acc + i.amount, 0);
@@ -117,7 +137,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {onOpenActivitiesModal && (
+            <button
+              onClick={onOpenActivitiesModal}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl transition-all"
+            >
+              <Briefcase className="w-4 h-4 text-blue-400" />
+              <span>Atividades de Renda</span>
+            </button>
+          )}
+
           <button
             id="tx-view-add-income-btn"
             onClick={onOpenAddIncome}
@@ -184,52 +214,76 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredIncomes.map((inc) => (
-                <div
-                  key={inc.id}
-                  id={`income-card-${inc.id}`}
-                  className="p-3.5 bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 rounded-xl flex items-center justify-between gap-3 group transition-all"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-md">
-                        {incomeTypeLabels[inc.sourceType || 'salario']}
-                      </span>
-                      {inc.date && (
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {formatDateBR(inc.date)}
-                        </span>
-                      )}
-                    </div>
-                    <h4 className="text-xs font-semibold text-white truncate">
-                      {inc.description}
-                    </h4>
-                    <span className="text-sm font-bold text-emerald-400 block mt-0.5">
-                      {formatCurrency(inc.amount)}
-                    </span>
-                  </div>
+              {filteredIncomes.map((inc) => {
+                const act = inc.activityId ? activityMap.get(inc.activityId) : null;
+                const isPassive = inc.incomeNature === 'passive' || inc.sourceType === 'dividendos';
 
-                  <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                    <button
-                      id={`edit-income-btn-${inc.id}`}
-                      onClick={() => onOpenEditIncome(inc)}
-                      className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                      title="Editar Renda"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      id={`delete-income-btn-${inc.id}`}
-                      onClick={() => onOpenDeleteIncome(inc)}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
-                      title="Excluir Renda"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                return (
+                  <div
+                    key={inc.id}
+                    id={`income-card-${inc.id}`}
+                    className="p-3.5 bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 rounded-xl flex items-center justify-between gap-3 group transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        {/* Natureza da Renda Badge */}
+                        <span
+                          className={`px-2 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 ${
+                            isPassive
+                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                              : 'bg-blue-500/10 text-blue-300 border-blue-500/20'
+                          }`}
+                        >
+                          {isPassive ? <TrendingUp className="w-2.5 h-2.5" /> : <Zap className="w-2.5 h-2.5" />}
+                          {isPassive ? 'Passiva' : 'Ativa'}
+                        </span>
+
+                        {/* Atividade Vinculada */}
+                        {act && (
+                          <span
+                            className="px-2 py-0.5 text-[10px] font-medium rounded-md border text-slate-300 bg-slate-800 border-slate-700 truncate max-w-[120px]"
+                            title={act.name}
+                          >
+                            {act.name}
+                          </span>
+                        )}
+
+                        {inc.date && (
+                          <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {formatDateBR(inc.date)}
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-semibold text-white truncate">
+                        {inc.description}
+                      </h4>
+                      <span className="text-sm font-bold text-emerald-400 block mt-0.5">
+                        {formatCurrency(inc.amount)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <button
+                        id={`edit-income-btn-${inc.id}`}
+                        onClick={() => onOpenEditIncome(inc)}
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        title="Editar Renda"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        id={`delete-income-btn-${inc.id}`}
+                        onClick={() => onOpenDeleteIncome(inc)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
+                        title="Excluir Renda"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -241,7 +295,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         <div className="space-y-3 border-b border-slate-800 pb-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-white">Lançamentos de Gastos & Aportes</h3>
+              <h3 className="text-sm font-bold text-white">Lançamentos de Gastos, Aportes & Negócios</h3>
               <span className="text-xs text-slate-400">
                 {filteredTransactions.length} item(ns) encontrado(s) • Total filtrado:{' '}
                 <strong className="text-slate-200">{formatCurrency(totalFilteredTxAmount)}</strong>
@@ -249,8 +303,24 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             </div>
 
             {/* Search Input and Sorter */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 sm:w-64">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Filtro por Atividade de Renda */}
+              {activities.length > 0 && (
+                <select
+                  value={selectedActivityFilter}
+                  onChange={(e) => setSelectedActivityFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-blue-500 [color-scheme:dark]"
+                >
+                  <option value="all">Todas Atividades</option>
+                  {activities.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} {!a.isActive ? '[Arq.]' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <div className="relative flex-1 sm:w-56">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   id="transaction-search-input"
@@ -325,13 +395,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-500"
             >
               <Plus className="w-3.5 h-3.5" />
-              Adicionar Primeiro Lançamento
+              Adicionar Lançamento
             </button>
           </div>
         ) : (
           <div className="space-y-2">
             {filteredTransactions.map((tx) => {
               const cat = CATEGORIES_CONFIG[tx.categoryId] || CATEGORIES_CONFIG.despesas;
+              const act = tx.activityId ? activityMap.get(tx.activityId) : null;
+              const status = tx.businessStatus || 'completed';
 
               return (
                 <div
@@ -367,6 +439,36 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         >
                           {cat.name}
                         </span>
+
+                        {/* Atividade Vinculada */}
+                        {act && (
+                          <span
+                            className="text-[10px] font-medium px-2 py-0.2 rounded-md border text-slate-300 bg-slate-800 border-slate-700 flex items-center gap-1"
+                            title={act.name}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: act.color || '#3b82f6' }} />
+                            {act.name}
+                          </span>
+                        )}
+
+                        {/* Status de Negócio */}
+                        {tx.categoryId === 'negocios' && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.2 rounded-md border flex items-center gap-1 ${
+                              status === 'in_progress'
+                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                : status === 'completed'
+                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                            }`}
+                          >
+                            {status === 'in_progress' && <Clock className="w-2.5 h-2.5 text-amber-400" />}
+                            {status === 'completed' && <CheckCircle className="w-2.5 h-2.5 text-emerald-400" />}
+                            {status === 'cancelled' && <XCircle className="w-2.5 h-2.5 text-rose-400" />}
+                            {status === 'in_progress' ? 'Em andamento' : status === 'completed' ? 'Finalizado' : 'Cancelado'}
+                          </span>
+                        )}
+
                         {tx.isRecurring && (
                           <span className="text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
                             <RotateCw className="w-2.5 h-2.5" /> Recorrente
@@ -416,6 +518,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                             const ret = tx.returnAmount || 0;
                             const net = ret - inv;
                             const roi = inv > 0 ? (net / inv) * 100 : 0;
+
+                            if (status === 'in_progress' && ret === 0) {
+                              return (
+                                <span className="text-amber-400 text-[11px] font-medium">
+                                  Aguardando retorno
+                                </span>
+                              );
+                            }
+
                             return (
                               <span
                                 className={`font-semibold px-1.5 py-0.5 rounded text-[11px] ${

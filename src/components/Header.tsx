@@ -17,11 +17,13 @@ import {
   Wallet,
   User,
   Trash2,
+  Landmark,
+  Briefcase,
 } from 'lucide-react';
 import { ActiveTab, MonthData } from '../types';
 import type { InsforgeUser } from '../lib/insforge';
-import { UserAccountModal } from './UserAccountModal';
 import { parseMonthId } from '../utils/formatters';
+import { UserAccountModal } from './UserAccountModal';
 
 interface HeaderProps {
   currentMonth: MonthData;
@@ -36,6 +38,7 @@ interface HeaderProps {
   onExportJSON: () => void;
   onExportCSV: () => void;
   onResetDemo: () => void;
+  onOpenActivitiesModal?: () => void;
   user?: InsforgeUser | null;
 }
 
@@ -52,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportJSON,
   onExportCSV,
   onResetDemo,
+  onOpenActivitiesModal,
   user,
 }) => {
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -80,6 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
   const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard do Mês', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'transactions', label: 'Lançamentos & Renda', icon: <ListOrdered className="w-4 h-4" /> },
+    { id: 'patrimonio', label: 'Patrimônio Líquido', icon: <Landmark className="w-4 h-4" /> },
     { id: 'history', label: 'Histórico & Comparativo', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'targets', label: 'Metas & Estrutura', icon: <Sliders className="w-4 h-4" /> },
     { id: 'annual', label: 'Relatório Anual', icon: <CalendarRange className="w-4 h-4" /> },

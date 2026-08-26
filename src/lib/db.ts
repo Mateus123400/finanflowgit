@@ -6,6 +6,10 @@ import type {
   CategoryTargets,
   CategoryId,
   Reward,
+  IncomeActivity,
+  AssetItem,
+  LiabilityItem,
+  AssetValuationHistory,
 } from '../types';
 
 // ============================================================
@@ -55,6 +59,8 @@ export async function fetchUserMonths(userId: string): Promise<MonthData[]> {
         amount: parseFloat(i.amount),
         date: i.date,
         sourceType: i.source_type,
+        incomeNature: i.income_nature || (i.source_type === 'dividendos' ? 'passive' : 'active'),
+        activityId: i.activity_id || undefined,
       }));
 
     const transactions: TransactionEntry[] = ((txRows as any[]) || [])
@@ -68,8 +74,10 @@ export async function fetchUserMonths(userId: string): Promise<MonthData[]> {
         paymentMethod: t.payment_method,
         notes: t.notes,
         isRecurring: t.is_recurring,
-        investedAmount: t.invested_amount ? parseFloat(t.invested_amount) : undefined,
-        returnAmount: t.return_amount ? parseFloat(t.return_amount) : undefined,
+        investedAmount: t.invested_amount !== null && t.invested_amount !== undefined ? parseFloat(t.invested_amount) : undefined,
+        returnAmount: t.return_amount !== null && t.return_amount !== undefined ? parseFloat(t.return_amount) : undefined,
+        activityId: t.activity_id || undefined,
+        businessStatus: t.business_status || 'completed',
       }));
 
     return {
@@ -86,8 +94,6 @@ export async function fetchUserMonths(userId: string): Promise<MonthData[]> {
 }
 
 export async function upsertMonth(userId: string, month: MonthData): Promise<void> {
-  // Upsert atômico: sem race condition, sem 409.
-  // A PRIMARY KEY agora é (id, user_id), então cada usuário tem sua própria linha.
   const { error } = await insforge.database
     .from('months')
     .upsert(
@@ -103,7 +109,6 @@ export async function upsertMonth(userId: string, month: MonthData): Promise<voi
 
   if (error) throw error;
 
-  // Salvar targets junto ao mês
   await saveTargets(userId, month.id, month.targets);
 }
 
@@ -120,10 +125,11 @@ export async function upsertIncome(userId: string, monthId: string, income: Inco
     amount: income.amount,
     date: income.date,
     source_type: income.sourceType ?? null,
+    income_nature: income.incomeNature ?? 'active',
+    activity_id: income.activityId ?? null,
     updated_at: new Date().toISOString(),
   };
 
-  // Upsert atômico por id (PK única por income)
   const { error } = await insforge.database
     .from('incomes')
     .upsert([payload], { onConflict: 'id' });
@@ -156,12 +162,13 @@ export async function upsertTransaction(
     payment_method: tx.paymentMethod ?? null,
     notes: tx.notes ?? null,
     is_recurring: tx.isRecurring ?? false,
-    invested_amount: tx.investedAmount ?? null,
-    return_amount: tx.returnAmount ?? null,
+    invested_amount: tx.investedAmount !== undefined ? tx.investedAmount : null,
+    return_amount: tx.returnAmount !== undefined ? tx.returnAmount : null,
+    activity_id: tx.activityId ?? null,
+    business_status: tx.businessStatus ?? 'completed',
     updated_at: new Date().toISOString(),
   };
 
-  // Upsert atômico por id (PK única por transaction)
   const { error } = await insforge.database
     .from('transactions')
     .upsert([payload], { onConflict: 'id' });
@@ -183,7 +190,6 @@ export async function saveTargets(
   monthId: string,
   targets: CategoryTargets
 ): Promise<void> {
-  // Apagar e reinserir os targets do mês do usuário
   await insforge.database
     .from('category_targets')
     .delete()
@@ -200,6 +206,170 @@ export async function saveTargets(
   const { error } = await insforge.database.from('category_targets').insert(rows);
   if (error) throw error;
 }
+
+// ============================================================
+// ATIVIDADES DE RENDA (INCOME ACTIVITIES)
+// ============================================================
+
+export async function fetchIncomeActivities(userId: string): Promise<IncomeActivity[]> {
+  const { data, error } = await insforge.database
+    .from('income_activities')
+    .select('*')
+    .eq('user_id', userId)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  if (!data) return [];
+
+  return (data as any[]).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    defaultType: r.default_type || 'active',
+    isActive: r.is_active !== false,
+    color: r.color || undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function upsertIncomeActivity(userId: string, activity: IncomeActivity): Promise<void> {
+  const payload = {
+    id: activity.id,
+    user_id: userId,
+    name: activity.name,
+    default_type: activity.defaultType,
+    is_active: activity.isActive,
+    color: activity.color || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await insforge.database
+    .from('income_activities')
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
+}
+
+export async function toggleArchiveIncomeActivity(activityId: string, isActive: boolean): Promise<void> {
+  const { error } = await insforge.database
+    .from('income_activities')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq('id', activityId);
+
+  if (error) throw error;
+}
+
+// ============================================================
+// PATRIMÔNIO: ATIVOS (ASSETS)
+// ============================================================
+
+export async function fetchAssets(userId: string): Promise<AssetItem[]> {
+  const { data, error } = await insforge.database
+    .from('assets')
+    .select('*')
+    .eq('user_id', userId)
+    .order('current_value', { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+
+  return (data as any[]).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    type: r.type,
+    currentValue: parseFloat(r.current_value) || 0,
+    valuationDate: r.valuation_date,
+    notes: r.notes || undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function upsertAsset(userId: string, asset: AssetItem): Promise<void> {
+  const payload = {
+    id: asset.id,
+    user_id: userId,
+    name: asset.name,
+    type: asset.type,
+    current_value: asset.currentValue,
+    valuation_date: asset.valuationDate,
+    notes: asset.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await insforge.database
+    .from('assets')
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
+}
+
+export async function deleteAsset(assetId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from('assets')
+    .delete()
+    .eq('id', assetId);
+
+  if (error) throw error;
+}
+
+// ============================================================
+// PATRIMÔNIO: PASSIVOS (LIABILITIES)
+// ============================================================
+
+export async function fetchLiabilities(userId: string): Promise<LiabilityItem[]> {
+  const { data, error } = await insforge.database
+    .from('liabilities')
+    .select('*')
+    .eq('user_id', userId)
+    .order('current_value', { ascending: false });
+
+  if (error) throw error;
+  if (!data) return [];
+
+  return (data as any[]).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    name: r.name,
+    type: r.type,
+    currentValue: parseFloat(r.current_value) || 0,
+    valuationDate: r.valuation_date,
+    notes: r.notes || undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function upsertLiability(userId: string, liability: LiabilityItem): Promise<void> {
+  const payload = {
+    id: liability.id,
+    user_id: userId,
+    name: liability.name,
+    type: liability.type,
+    current_value: liability.currentValue,
+    valuation_date: liability.valuationDate,
+    notes: liability.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await insforge.database
+    .from('liabilities')
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
+}
+
+export async function deleteLiability(liabilityId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from('liabilities')
+    .delete()
+    .eq('id', liabilityId);
+
+  if (error) throw error;
+}
+
 // ============================================================
 // REWARDS
 // ============================================================
@@ -296,3 +466,4 @@ export async function deleteMonth(userId: string, monthId: string): Promise<void
     .eq('user_id', userId);
   if (mErr) throw mErr;
 }
+

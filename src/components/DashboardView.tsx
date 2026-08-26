@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   Zap,
   Info,
+  Briefcase,
+  Landmark,
+  Layers,
 } from 'lucide-react';
 import {
   PieChart,
@@ -27,7 +30,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { CategoryId, MonthData, MonthSummary } from '../types';
+import { CategoryId, IncomeActivity, MonthData, MonthSummary, NetWorthSummary } from '../types';
 import { CATEGORIES_CONFIG, CATEGORY_IDS } from '../utils/constants';
 import { formatCurrency, formatPercent } from '../utils/formatters';
 import { CategoryIcon } from './CategoryIcon';
@@ -35,29 +38,47 @@ import { CategoryIcon } from './CategoryIcon';
 interface DashboardViewProps {
   currentMonth: MonthData;
   summary: MonthSummary;
+  activities?: IncomeActivity[];
+  netWorthSummary?: NetWorthSummary;
   onOpenTransactionModal: (defaultCategory?: CategoryId) => void;
   onOpenIncomeModal: () => void;
   onGoToTargets: () => void;
   onGoToTransactions: (filterCategory?: CategoryId) => void;
+  onGoToPatrimonio?: () => void;
+  onOpenActivitiesModal?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   currentMonth,
   summary,
+  activities = [],
+  netWorthSummary,
   onOpenTransactionModal,
   onOpenIncomeModal,
   onGoToTargets,
   onGoToTransactions,
+  onGoToPatrimonio,
+  onOpenActivitiesModal,
 }) => {
   const {
     totalIncome,
+    activeIncome,
+    passiveIncome,
     totalExpensesAndAllocations,
+    totalOperationalExpenses,
+    totalGrowthInvestments,
+    businessTotalInvested,
+    businessTotalReturned,
+    businessNetProfit,
+    businessRoiPercent,
     remainingBalance,
+    availableCashBalance,
     categories,
     unallocatedTargetPercent,
     unallocatedTargetAmount,
     investmentAndSavingsRate,
     growthTotal,
+    activitySummaries = [],
   } = summary;
 
   // Donut chart data (distribution of actual expenses/allocations)
@@ -71,7 +92,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }).filter((item) => item.value > 0);
 
-  // If no transactions yet, show placeholder slice
   const hasTransactions = donutData.length > 0;
   const pieDisplayData = hasTransactions
     ? donutData
@@ -153,14 +173,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* 1. TOP SUMMARY KPI CARDS */}
+      {/* ─── 1. TOP FLUXO FINANCIAL KPI CARDS ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Income Card */}
+        {/* 1. Total Income Card com Renda Ativa e Passiva */}
         <div
           id="kpi-total-income-card"
           className="relative bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all group overflow-hidden"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
               Renda Total do Mês
             </span>
@@ -168,64 +188,120 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold tracking-tight text-white">
+          <div className="space-y-2">
+            <div className="text-2xl font-black tracking-tight text-white">
               {formatCurrency(totalIncome)}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>{(currentMonth.incomes || []).length} entrada(s) de renda</span>
+            
+            {/* Badges Ativa vs Passiva */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                <Zap className="w-3 h-3 text-blue-400" />
+                Ativa: {formatCurrency(activeIncome)}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                <TrendingUp className="w-3 h-3 text-emerald-400" />
+                Passiva: {formatCurrency(passiveIncome)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+              <span>{(currentMonth.incomes || []).length} entrada(s)</span>
               <button
                 id="kpi-add-income-btn"
                 onClick={onOpenIncomeModal}
                 className="text-emerald-400 hover:text-emerald-300 hover:underline font-medium inline-flex items-center gap-0.5"
               >
-                + Adicionar
+                + Nova Renda
               </button>
             </div>
           </div>
         </div>
 
-        {/* Total Spent / Allocated Card */}
+        {/* 2. Despesas Operacionais / Essenciais */}
         <div
-          id="kpi-total-spent-card"
+          id="kpi-operational-expenses-card"
           className="relative bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all group overflow-hidden"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Total Alocado & Gastos
+              Despesas & Consumo
             </span>
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:scale-105 transition-transform">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold tracking-tight text-white">
-              {formatCurrency(totalExpensesAndAllocations)}
+          <div className="space-y-2">
+            <div className="text-2xl font-black tracking-tight text-white">
+              {formatCurrency(totalOperationalExpenses)}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="text-xs text-slate-400">
               <span>
                 {totalIncome > 0
-                  ? `${formatPercent((totalExpensesAndAllocations / totalIncome) * 100)} da renda`
+                  ? `${formatPercent((totalOperationalExpenses / totalIncome) * 100)} da renda consumida`
                   : '0% da renda'}
               </span>
-              <span>{(currentMonth.transactions || []).length} lançamentos</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+              <span>Fixos, contas & doações</span>
+              <button
+                onClick={() => onOpenTransactionModal('despesas')}
+                className="text-blue-400 hover:text-blue-300 hover:underline font-medium inline-flex items-center gap-0.5"
+              >
+                + Lançar
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Remaining Unallocated Balance Card */}
+        {/* 3. Aportes & Investimentos Patrimoniais */}
+        <div
+          id="kpi-investment-rate-card"
+          className="relative bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all group overflow-hidden"
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Aportes & Investimentos
+            </span>
+            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-105 transition-transform">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="text-2xl font-black tracking-tight text-white flex items-baseline gap-2">
+              <span>{formatCurrency(growthTotal)}</span>
+              <span className="text-sm font-semibold text-cyan-400">
+                ({formatPercent(investmentAndSavingsRate)})
+              </span>
+            </div>
+            <div className="text-xs text-slate-400">
+              <span>Mudança de composição patrimonial</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+              <span className="text-cyan-400 font-medium">Investimentos + Poupança</span>
+              <button
+                onClick={() => onOpenTransactionModal('investimento')}
+                className="text-cyan-400 hover:text-cyan-300 hover:underline font-medium"
+              >
+                + Aportar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Saldo Disponível em Caixa */}
         <div
           id="kpi-remaining-balance-card"
           className="relative bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all group overflow-hidden"
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Saldo Restante / Livre
+              Saldo Disponível
             </span>
             <div
               className={`p-2 rounded-xl border transition-transform group-hover:scale-105 ${
                 remainingBalance >= 0
-                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
               }`}
             >
@@ -236,64 +312,204 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div
-              className={`text-2xl font-bold tracking-tight ${
-                remainingBalance >= 0 ? 'text-blue-400' : 'text-rose-400'
+              className={`text-2xl font-black tracking-tight ${
+                remainingBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'
               }`}
             >
               {formatCurrency(remainingBalance)}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="text-xs text-slate-400 flex items-center justify-between">
               <span>
-                {remainingBalance >= 0 ? 'Disponível / Margem' : 'Gastos excederam renda'}
-              </span>
-              <span className="text-slate-500">
-                Meta livre: {formatPercent(unallocatedTargetPercent)}
+                {remainingBalance >= 0 ? 'Margem livre do mês' : 'Gastos excederam renda'}
               </span>
             </div>
-          </div>
-        </div>
-
-        {/* Growth & Investment Rate Card */}
-        <div
-          id="kpi-investment-rate-card"
-          className="relative bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all group overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Investimentos + Poupança
-            </span>
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 group-hover:scale-105 transition-transform">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold tracking-tight text-white flex items-baseline gap-2">
-              <span>{formatCurrency(growthTotal)}</span>
-              <span className="text-sm font-semibold text-cyan-400">
-                ({formatPercent(investmentAndSavingsRate)})
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Construção de patrimônio</span>
-              <span className="text-cyan-400 font-medium">
-                Meta combinada: {formatPercent((summary.categories.investimento?.targetPercent || 0) + (summary.categories.poupanca?.targetPercent || 0))}
-              </span>
+            <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+              <span>Buffer planejado:</span>
+              <span className="font-semibold text-slate-300">{formatCurrency(unallocatedTargetAmount)}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. CATEGORY PROGRESS & TARGETS SECTION */}
-      <div className="space-y-3">
+      {/* ─── 2. SEÇÃO DE NEGÓCIOS & ATIVIDADES DE RENDA ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Card: Resultado Consolidado de Negócios */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Resultado de Negócios</h3>
+                <p className="text-[11px] text-slate-400">Projetos, revendas e empreendimentos</p>
+              </div>
+            </div>
+            <button
+              onClick={() => onOpenTransactionModal('negocios')}
+              className="text-xs text-amber-400 hover:text-amber-300 font-semibold"
+            >
+              + Negócio
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+            <div className="p-2.5 bg-slate-850 rounded-xl border border-slate-750">
+              <span className="text-[10px] text-slate-400 block">Capital Investido:</span>
+              <span className="text-sm font-bold text-white block mt-0.5">
+                {formatCurrency(businessTotalInvested)}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-850 rounded-xl border border-slate-750">
+              <span className="text-[10px] text-slate-400 block">Retorno Recebido:</span>
+              <span className="text-sm font-bold text-emerald-400 block mt-0.5">
+                {formatCurrency(businessTotalReturned)}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-slate-400 block">Resultado Líquido:</span>
+              <span className={`text-base font-black ${businessNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {formatCurrency(businessNetProfit)}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 block">ROI Geral:</span>
+              <span className={`text-sm font-bold ${businessRoiPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {businessRoiPercent >= 0 ? `+${formatPercent(businessRoiPercent)}` : formatPercent(businessRoiPercent)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card: Distribuição por Atividade de Renda */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Atividades de Renda</h3>
+                <p className="text-[11px] text-slate-400">Ganhos agrupados por canal</p>
+              </div>
+            </div>
+            {onOpenActivitiesModal && (
+              <button
+                onClick={onOpenActivitiesModal}
+                className="text-xs text-blue-400 hover:text-blue-300 font-semibold"
+              >
+                Gerenciar
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar text-xs">
+            {activitySummaries.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">
+                Nenhuma atividade vinculada neste mês. Vincule rendas e negócios a atividades dinâmicas.
+              </div>
+            ) : (
+              activitySummaries.map((act) => (
+                <div
+                  key={act.activityId}
+                  className="flex items-center justify-between p-2 bg-slate-850 rounded-xl border border-slate-750"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: act.color || '#3b82f6' }}
+                    />
+                    <div>
+                      <span className="font-semibold text-white block">{act.name}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {act.nature === 'passive' ? 'Passiva' : 'Ativa'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-emerald-400 block">{formatCurrency(act.totalIncome)}</span>
+                    {act.totalInvested > 0 && (
+                      <span className={`text-[10px] ${act.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        Lucro: {formatCurrency(act.netProfit)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Card: Visão Rápida de Patrimônio */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3.5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Landmark className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Patrimônio Consolidado</h3>
+                  <p className="text-[11px] text-slate-400">Bens, contas e passivos</p>
+                </div>
+              </div>
+              {onGoToPatrimonio && (
+                <button
+                  onClick={onGoToPatrimonio}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
+                >
+                  Ver Tudo &rarr;
+                </button>
+              )}
+            </div>
+
+            {netWorthSummary ? (
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between p-2 bg-slate-850 rounded-xl border border-slate-750">
+                  <span className="text-slate-300">Total de Ativos:</span>
+                  <span className="font-bold text-emerald-400">{formatCurrency(netWorthSummary.totalAssets)}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-slate-850 rounded-xl border border-slate-750">
+                  <span className="text-slate-300">Total de Passivos:</span>
+                  <span className="font-bold text-rose-400">{formatCurrency(netWorthSummary.totalLiabilities)}</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-slate-950 rounded-xl border border-emerald-500/30">
+                  <span className="font-semibold text-emerald-300">Patrimônio Líquido:</span>
+                  <span className="font-black text-emerald-400 text-sm">{formatCurrency(netWorthSummary.netWorth)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-slate-500 text-xs">
+                Nenhum ativo ou passivo cadastrado.
+              </div>
+            )}
+          </div>
+
+          {onGoToPatrimonio && (
+            <button
+              onClick={onGoToPatrimonio}
+              className="w-full py-2 text-xs font-semibold text-center text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl transition-all"
+            >
+              Acessar Módulo Patrimônio
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─── 3. CATEGORY PROGRESS & TARGETS SECTION ─── */}
+      <div className="space-y-3 pt-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <span>Metas e Acompanhamento por Categoria</span>
+              <span>Distribuição da Renda por Metas Percentuais</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Valores planejados pela porcentagem da renda vs valor realizado
+              Metas percentuais planejadas sobre a Renda Total vs valores executados
             </p>
           </div>
 
@@ -306,13 +522,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
 
-        {/* 5 Categories Grid + Unallocated Card */}
+        {/* 6 Categories Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {CATEGORY_IDS.map((catId) => {
             const calc = categories[catId];
             const { category, targetPercent, targetAmount, actualAmount, difference, status } = calc;
 
-            // Determine bar color based on category nature and status
             let barColor = 'bg-blue-500';
             let statusBadge = { text: 'No limite', color: 'text-slate-300 bg-slate-800 border-slate-700' };
 
@@ -340,14 +555,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }
             }
 
-            // Clamped progress bar width (max 100%)
             const barWidthPercent = targetAmount > 0
               ? Math.min(100, Math.max(0, (actualAmount / targetAmount) * 100))
               : actualAmount > 0 ? 100 : 0;
-
-            const isExceeded = category.nature === 'expense' || category.nature === 'purpose'
-              ? difference < 0
-              : false;
 
             return (
               <div
@@ -355,7 +565,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 id={`category-card-${catId}`}
                 className="bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-lg shadow-black/20 flex flex-col justify-between transition-all"
               >
-                {/* Header of Category Card */}
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
@@ -386,7 +595,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Values Real vs Planned */}
                   <div className="space-y-1 my-3">
                     <div className="flex items-baseline justify-between">
                       <span className="text-xs text-slate-400">
@@ -404,7 +612,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                     </div>
 
-                    {/* Special Negócios Metrics: Retorno, Lucro e ROI */}
                     {catId === 'negocios' && (
                       <div className="pt-2 mt-2 border-t border-slate-800/80 space-y-1.5 bg-slate-950/40 p-2 rounded-xl">
                         <div className="flex items-center justify-between text-xs">
@@ -442,7 +649,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     )}
                   </div>
 
-                  {/* Progress Bar with mathematical visual feedback */}
                   <div className="space-y-1.5 my-3">
                     <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-750">
                       <div
@@ -470,7 +676,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* Card Actions Footer */}
                 <div className="pt-3 mt-1 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
                     id={`view-tx-category-${catId}-btn`}
@@ -493,7 +698,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             );
           })}
 
-          {/* 6. Unallocated / Free Buffer Card */}
+          {/* Unallocated / Free Buffer Card */}
           <div
             id="category-card-unallocated"
             className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg shadow-black/20 flex flex-col justify-between"
@@ -557,7 +762,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 3. CHARTS SECTION (DONUT & COMPARISON BARS) */}
+      {/* ─── 4. CHARTS SECTION (DONUT & COMPARISON BARS) ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
         {/* Donut Chart: Real Distribution */}
         <div
