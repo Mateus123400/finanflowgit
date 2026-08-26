@@ -12,6 +12,7 @@ import {
   RotateCcw,
   MoreVertical,
   Calendar,
+  CalendarRange,
   Wallet,
   User,
 } from 'lucide-react';
@@ -77,6 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'transactions', label: 'Lançamentos & Renda', icon: <ListOrdered className="w-4 h-4" /> },
     { id: 'history', label: 'Histórico & Comparativo', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'targets', label: 'Metas & Estrutura', icon: <Sliders className="w-4 h-4" /> },
+    { id: 'annual', label: 'Relatório Anual', icon: <CalendarRange className="w-4 h-4" /> },
   ];
 
   return (

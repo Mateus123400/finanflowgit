@@ -57,7 +57,7 @@ export const NewMonthModal: React.FC<NewMonthModalProps> = ({
     onClose();
   };
 
-  const years = [2025, 2026, 2027, 2028];
+  const years = [2025, 2026, 2027, 2028, 2029, 2030];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">

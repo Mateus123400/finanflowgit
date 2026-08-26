@@ -19,6 +19,7 @@ import { IncomeModal } from './components/IncomeModal';
 import { NewMonthModal } from './components/NewMonthModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { AuthPage } from './components/AuthPage';
+import { AnnualView } from './components/AnnualView';
 import { CATEGORIES_CONFIG, DEFAULT_TARGETS } from './utils/constants';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
@@ -360,6 +361,10 @@ export default function App() {
             onApplyTargetsToAllMonths={handleApplyTargetsToAllMonths}
             onDuplicateStructureFromMonth={handleDuplicateStructureFromMonth}
           />
+        )}
+
+        {activeTab === 'annual' && (
+          <AnnualView allMonths={months} />
         )}
       </main>
 

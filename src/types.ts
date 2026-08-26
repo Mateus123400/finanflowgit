@@ -82,4 +82,4 @@ export interface MonthSummary {
   growthTotal: number; // investimento + poupança in R$
 }
 
-export type ActiveTab = 'dashboard' | 'transactions' | 'history' | 'targets';
+export type ActiveTab = 'dashboard' | 'transactions' | 'history' | 'targets' | 'annual';
