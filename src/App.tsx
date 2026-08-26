@@ -255,7 +255,10 @@ export default function App() {
 
   // ——— TELA DE AUTH ———
   if (!user) {
-    return <AuthPage onAuthenticated={() => window.location.reload()} />;
+    // O AuthContext detecta automaticamente a sessão via onAuthStateChange.
+    // Para email/senha e OAuth (Google), não é necessário fazer reload —
+    // o listener dispara e o React re-renderiza automaticamente.
+    return <AuthPage onAuthenticated={() => {}} />;
   }
 
   // ——— LOADING DOS DADOS DO DB ———
