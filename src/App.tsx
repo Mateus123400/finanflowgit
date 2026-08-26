@@ -604,12 +604,14 @@ export default function App() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirmed}
         title={deleteTarget?.type === 'transaction' ? 'Excluir Lançamento' : 'Excluir Fonte de Renda'}
-        itemDescription={deleteTarget?.item.description || ''}
-        itemAmount={deleteTarget?.item.amount}
+        itemDescription={deleteTarget?.item?.description || ''}
+        itemAmount={deleteTarget?.item?.amount}
         itemCategoryName={
-          deleteTarget?.type === 'transaction'
-            ? CATEGORIES_CONFIG[(deleteTarget.item as TransactionEntry).categoryId]?.name
-            : 'Entrada de Renda'
+          deleteTarget
+            ? deleteTarget.type === 'transaction'
+              ? CATEGORIES_CONFIG[(deleteTarget.item as TransactionEntry).categoryId]?.name
+              : 'Entrada de Renda'
+            : ''
         }
       />
 

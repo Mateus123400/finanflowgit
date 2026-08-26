@@ -642,12 +642,14 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirmed}
         title={deleteTarget?.type === 'asset' ? 'Excluir Ativo Patrimonial' : 'Excluir Passivo / Dívida'}
-        itemDescription={deleteTarget?.item.name || ''}
-        itemAmount={deleteTarget?.item.currentValue}
+        itemDescription={deleteTarget?.item?.name || ''}
+        itemAmount={deleteTarget?.item?.currentValue}
         itemCategoryName={
-          deleteTarget?.type === 'asset'
-            ? ASSET_TYPE_CONFIG[(deleteTarget.item as AssetItem).type]?.label
-            : LIABILITY_TYPE_CONFIG[(deleteTarget.item as LiabilityItem).type]?.label
+          deleteTarget
+            ? deleteTarget.type === 'asset'
+              ? ASSET_TYPE_CONFIG[(deleteTarget.item as AssetItem).type]?.label
+              : LIABILITY_TYPE_CONFIG[(deleteTarget.item as LiabilityItem).type]?.label
+            : ''
         }
       />
     </div>
