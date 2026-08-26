@@ -41,7 +41,7 @@ export async function fetchUserMonths(userId: string): Promise<MonthData[]> {
     };
 
     ((targetRows as any[]) || [])
-      .filter((t: any) => t.month_id === m.id)
+      .filter((t: any) => t.month_id === m.id && t.user_id === userId)
       .forEach((t: any) => {
         targets[t.category_id as CategoryId] = parseFloat(t.target_percent);
       });
@@ -85,33 +85,24 @@ export async function fetchUserMonths(userId: string): Promise<MonthData[]> {
 }
 
 export async function upsertMonth(userId: string, month: MonthData): Promise<void> {
-  // Tenta update; se não encontrar, faz insert
-  const { data: existing } = await insforge.database
+  // Upsert atômico: sem race condition, sem 409.
+  // A PRIMARY KEY agora é (id, user_id), então cada usuário tem sua própria linha.
+  const { error } = await insforge.database
     .from('months')
-    .select('id')
-    .eq('id', month.id)
-    .eq('user_id', userId)
-    .maybeSingle();
+    .upsert(
+      [{
+        id: month.id,
+        user_id: userId,
+        year: month.year,
+        month: month.month,
+        updated_at: new Date().toISOString(),
+      }],
+      { onConflict: 'id,user_id' }
+    );
 
-  if (existing) {
-    const { error } = await insforge.database
-      .from('months')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', month.id)
-      .eq('user_id', userId);
-    if (error) throw error;
-  } else {
-    const { error } = await insforge.database.from('months').insert([{
-      id: month.id,
-      user_id: userId,
-      year: month.year,
-      month: month.month,
-      updated_at: new Date().toISOString(),
-    }]);
-    if (error) throw error;
-  }
+  if (error) throw error;
 
-  // Upsert targets usando delete+insert para simplicidade
+  // Salvar targets junto ao mês
   await saveTargets(userId, month.id, month.targets);
 }
 
@@ -120,12 +111,6 @@ export async function upsertMonth(userId: string, month: MonthData): Promise<voi
 // ============================================================
 
 export async function upsertIncome(userId: string, monthId: string, income: IncomeEntry): Promise<void> {
-  const { data: existing } = await insforge.database
-    .from('incomes')
-    .select('id')
-    .eq('id', income.id)
-    .maybeSingle();
-
   const payload = {
     id: income.id,
     month_id: monthId,
@@ -137,16 +122,12 @@ export async function upsertIncome(userId: string, monthId: string, income: Inco
     updated_at: new Date().toISOString(),
   };
 
-  if (existing) {
-    const { error } = await insforge.database
-      .from('incomes')
-      .update(payload)
-      .eq('id', income.id);
-    if (error) throw error;
-  } else {
-    const { error } = await insforge.database.from('incomes').insert([payload]);
-    if (error) throw error;
-  }
+  // Upsert atômico por id (PK única por income)
+  const { error } = await insforge.database
+    .from('incomes')
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
 }
 
 export async function deleteIncome(incomeId: string): Promise<void> {
@@ -163,12 +144,6 @@ export async function upsertTransaction(
   monthId: string,
   tx: TransactionEntry
 ): Promise<void> {
-  const { data: existing } = await insforge.database
-    .from('transactions')
-    .select('id')
-    .eq('id', tx.id)
-    .maybeSingle();
-
   const payload = {
     id: tx.id,
     month_id: monthId,
@@ -185,16 +160,12 @@ export async function upsertTransaction(
     updated_at: new Date().toISOString(),
   };
 
-  if (existing) {
-    const { error } = await insforge.database
-      .from('transactions')
-      .update(payload)
-      .eq('id', tx.id);
-    if (error) throw error;
-  } else {
-    const { error } = await insforge.database.from('transactions').insert([payload]);
-    if (error) throw error;
-  }
+  // Upsert atômico por id (PK única por transaction)
+  const { error } = await insforge.database
+    .from('transactions')
+    .upsert([payload], { onConflict: 'id' });
+
+  if (error) throw error;
 }
 
 export async function deleteTransaction(txId: string): Promise<void> {
@@ -211,7 +182,7 @@ export async function saveTargets(
   monthId: string,
   targets: CategoryTargets
 ): Promise<void> {
-  // Apaga targets existentes para o mês e reinserir
+  // Apagar e reinserir os targets do mês do usuário
   await insforge.database
     .from('category_targets')
     .delete()
