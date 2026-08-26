@@ -6,6 +6,7 @@ import {
   IncomeEntry,
   MonthData,
   TransactionEntry,
+  Reward,
 } from './types';
 import { createNewMonthData, exportDataAsJSON, exportMonthToCSV } from './utils/storage';
 import { calculateMonthSummary } from './utils/calculations';
@@ -20,6 +21,7 @@ import { NewMonthModal } from './components/NewMonthModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { AuthPage } from './components/AuthPage';
 import { AnnualView } from './components/AnnualView';
+import { RewardsView } from './components/RewardsView';
 import { CATEGORIES_CONFIG, DEFAULT_TARGETS } from './utils/constants';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
@@ -31,6 +33,7 @@ import {
   upsertTransaction,
   deleteTransaction,
   saveTargets,
+  fetchRewards,
 } from './lib/db';
 
 export default function App() {
@@ -47,6 +50,7 @@ export default function App() {
 
   // ——— Estado principal ———
   const [months, setMonths] = useState<MonthData[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [activeMonthId, setActiveMonthId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [txCategoryFilter, setTxCategoryFilter] = useState<CategoryId | 'all'>('all');
@@ -75,20 +79,26 @@ export default function App() {
     // Quando não há usuário, limpar TUDO para garantir isolamento total
     if (!user) {
       setMonths([]);
+      setRewards([]);
       setActiveMonthId('');
       return;
     }
 
     // Limpar dados do usuário anterior ANTES de buscar os novos
     setMonths([]);
+    setRewards([]);
     setActiveMonthId('');
     setDbLoading(true);
 
-    fetchUserMonths(user.id)
-      .then((data) => {
-        if (data.length > 0) {
-          setMonths(data);
-          setActiveMonthId(data[data.length - 1].id);
+    Promise.all([
+      fetchUserMonths(user.id),
+      fetchRewards(user.id),
+    ])
+      .then(([monthsData, rewardsData]) => {
+        setRewards(rewardsData);
+        if (monthsData.length > 0) {
+          setMonths(monthsData);
+          setActiveMonthId(monthsData[monthsData.length - 1].id);
         } else {
           // Novo usuário sem dados — criar mês atual
           const now = new Date();
@@ -365,6 +375,15 @@ export default function App() {
 
         {activeTab === 'annual' && (
           <AnnualView allMonths={months} />
+        )}
+
+        {activeTab === 'rewards' && user && (
+          <RewardsView
+            allMonths={months}
+            rewards={rewards}
+            userId={user.id}
+            onRewardsChange={setRewards}
+          />
         )}
       </main>
 

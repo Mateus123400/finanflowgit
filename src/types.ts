@@ -82,4 +82,24 @@ export interface MonthSummary {
   growthTotal: number; // investimento + poupança in R$
 }
 
-export type ActiveTab = 'dashboard' | 'transactions' | 'history' | 'targets' | 'annual';
+export type ActiveTab = 'dashboard' | 'transactions' | 'history' | 'targets' | 'annual' | 'rewards';
+
+export type RewardConditionType =
+  | 'renda_mensal'
+  | 'renda_anual'
+  | 'categoria_acumulada'
+  | 'taxa_poupanca';
+
+export interface Reward {
+  id: string;
+  name: string;
+  emoji: string;
+  description?: string;
+  conditionType: RewardConditionType;
+  conditionValue: number;
+  conditionCategory?: string;
+  isAchieved: boolean;
+  achievedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

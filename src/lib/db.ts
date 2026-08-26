@@ -5,6 +5,7 @@ import type {
   TransactionEntry,
   CategoryTargets,
   CategoryId,
+  Reward,
 } from '../types';
 
 // ============================================================
@@ -197,5 +198,63 @@ export async function saveTargets(
   }));
 
   const { error } = await insforge.database.from('category_targets').insert(rows);
+  if (error) throw error;
+}
+// ============================================================
+// REWARDS
+// ============================================================
+
+export async function fetchRewards(userId: string): Promise<Reward[]> {
+  const { data, error } = await insforge.database
+    .from('rewards')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  if (!data) return [];
+
+  return (data as any[]).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    emoji: r.emoji,
+    description: r.description ?? undefined,
+    conditionType: r.condition_type,
+    conditionValue: parseFloat(r.condition_value),
+    conditionCategory: r.condition_category ?? undefined,
+    isAchieved: r.is_achieved,
+    achievedAt: r.achieved_at ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function upsertReward(userId: string, reward: Reward): Promise<void> {
+  const { error } = await insforge.database
+    .from('rewards')
+    .upsert(
+      [{
+        id: reward.id,
+        user_id: userId,
+        name: reward.name,
+        emoji: reward.emoji,
+        description: reward.description ?? null,
+        condition_type: reward.conditionType,
+        condition_value: reward.conditionValue,
+        condition_category: reward.conditionCategory ?? null,
+        is_achieved: reward.isAchieved,
+        achieved_at: reward.achievedAt ?? null,
+        updated_at: new Date().toISOString(),
+      }],
+      { onConflict: 'id' }
+    );
+  if (error) throw error;
+}
+
+export async function deleteReward(rewardId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from('rewards')
+    .delete()
+    .eq('id', rewardId);
   if (error) throw error;
 }

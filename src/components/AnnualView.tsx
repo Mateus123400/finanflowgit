@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   CalendarDays,
   TrendingUp,
-  TrendingDown,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -13,9 +12,10 @@ import {
   DollarSign,
   PiggyBank,
   Wallet,
+  FileText,
 } from 'lucide-react';
 import { MonthData } from '../types';
-import { calculateMonthSummary, getHistoricalData } from '../utils/calculations';
+import { calculateMonthSummary } from '../utils/calculations';
 
 const MONTH_NAMES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MONTH_NAMES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -133,46 +133,116 @@ export function AnnualView({ allMonths }: AnnualViewProps) {
       'Mês', 'Renda Total (R$)', 'Total Alocado (R$)', 'Saldo (R$)', 'Taxa Poupança/Invest (%)',
       'Despesas (R$)', 'Investimento (R$)', 'Conhecimento (R$)', 'Doação (R$)', 'Poupança (R$)', 'Negócios (R$)',
     ];
-
     const rows = curStats.months.map((m) => [
       m.label,
-      m.totalIncome.toFixed(2),
-      m.totalSpent.toFixed(2),
-      m.balance.toFixed(2),
-      m.savingsRate.toFixed(1),
-      (m.categories.despesas || 0).toFixed(2),
-      (m.categories.investimento || 0).toFixed(2),
-      (m.categories.conhecimento || 0).toFixed(2),
-      (m.categories.doacao || 0).toFixed(2),
-      (m.categories.poupanca || 0).toFixed(2),
-      (m.categories.negocios || 0).toFixed(2),
+      m.totalIncome.toFixed(2), m.totalSpent.toFixed(2), m.balance.toFixed(2), m.savingsRate.toFixed(1),
+      (m.categories.despesas||0).toFixed(2),(m.categories.investimento||0).toFixed(2),
+      (m.categories.conhecimento||0).toFixed(2),(m.categories.doacao||0).toFixed(2),
+      (m.categories.poupanca||0).toFixed(2),(m.categories.negocios||0).toFixed(2),
     ]);
-
-    // Totals row
-    rows.push([
-      `TOTAL ${selectedYear}`,
-      curStats.totalIncome.toFixed(2),
-      curStats.totalSpent.toFixed(2),
-      curStats.totalBalance.toFixed(2),
-      curStats.avgSavingsRate.toFixed(1),
-      curStats.months.reduce((s, m) => s + (m.categories.despesas || 0), 0).toFixed(2),
-      curStats.months.reduce((s, m) => s + (m.categories.investimento || 0), 0).toFixed(2),
-      curStats.months.reduce((s, m) => s + (m.categories.conhecimento || 0), 0).toFixed(2),
-      curStats.months.reduce((s, m) => s + (m.categories.doacao || 0), 0).toFixed(2),
-      curStats.months.reduce((s, m) => s + (m.categories.poupanca || 0), 0).toFixed(2),
-      curStats.months.reduce((s, m) => s + (m.categories.negocios || 0), 0).toFixed(2),
+    rows.push([`TOTAL ${selectedYear}`,curStats.totalIncome.toFixed(2),curStats.totalSpent.toFixed(2),curStats.totalBalance.toFixed(2),curStats.avgSavingsRate.toFixed(1),
+      curStats.months.reduce((s,m)=>s+(m.categories.despesas||0),0).toFixed(2),
+      curStats.months.reduce((s,m)=>s+(m.categories.investimento||0),0).toFixed(2),
+      curStats.months.reduce((s,m)=>s+(m.categories.conhecimento||0),0).toFixed(2),
+      curStats.months.reduce((s,m)=>s+(m.categories.doacao||0),0).toFixed(2),
+      curStats.months.reduce((s,m)=>s+(m.categories.poupanca||0),0).toFixed(2),
+      curStats.months.reduce((s,m)=>s+(m.categories.negocios||0),0).toFixed(2),
     ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF'
-      + [headers, ...rows].map((r) => r.join(';')).join('\n');
-
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers,...rows].map(r=>r.join(';')).join('\n');
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csvContent));
     link.setAttribute('download', `finanflow-anual-${selectedYear}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
+
+  // ---------- PDF Export ----------
+  const handleExportPDF = () => {
+    const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const MONTHS_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+    const rows = MONTHS_FULL.map((name, idx) => {
+      const m = curStats.months.find(x => x.monthNum === idx + 1);
+      if (!m) return `<tr><td style="color:#666">${MONTHS_PT[idx]}</td><td colspan="10" style="color:#666;text-align:center;font-style:italic">— sem dados —</td></tr>`;
+      const bal = m.balance >= 0 ? `<span style="color:#059669">${fmt(m.balance)}</span>` : `<span style="color:#dc2626">${fmt(m.balance)}</span>`;
+      return `<tr>
+        <td><strong>${name}</strong></td>
+        <td style="color:#16a34a">${fmt(m.totalIncome)}</td>
+        <td style="color:#2563eb">${fmt(m.totalSpent)}</td>
+        <td style="color:#dc2626">${fmt(m.categories.despesas||0)}</td>
+        <td style="color:#0ea5e9">${fmt(m.categories.investimento||0)}</td>
+        <td style="color:#7c3aed">${fmt(m.categories.conhecimento||0)}</td>
+        <td style="color:#0d9488">${fmt(m.categories.doacao||0)}</td>
+        <td style="color:#d97706">${fmt(m.categories.poupanca||0)}</td>
+        <td style="color:#ea580c">${fmt(m.categories.negocios||0)}</td>
+        <td>${bal}</td>
+        <td style="color:#7c3aed">${m.savingsRate.toFixed(1)}%</td>
+      </tr>`;
+    }).join('');
+
+    const totalsRow = `<tr style="background:#f1f5f9;font-weight:bold;font-size:13px">
+      <td>TOTAL ${selectedYear}</td>
+      <td style="color:#16a34a">${fmt(curStats.totalIncome)}</td>
+      <td style="color:#2563eb">${fmt(curStats.totalSpent)}</td>
+      <td style="color:#dc2626">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.despesas||0),0))}</td>
+      <td style="color:#0ea5e9">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.investimento||0),0))}</td>
+      <td style="color:#7c3aed">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.conhecimento||0),0))}</td>
+      <td style="color:#0d9488">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.doacao||0),0))}</td>
+      <td style="color:#d97706">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.poupanca||0),0))}</td>
+      <td style="color:#ea580c">${fmt(curStats.months.reduce((s,m)=>s+(m.categories.negocios||0),0))}</td>
+      <td style="color:${curStats.totalBalance>=0?'#059669':'#dc2626'}">${fmt(curStats.totalBalance)}</td>
+      <td style="color:#7c3aed">${curStats.avgSavingsRate.toFixed(1)}%</td>
+    </tr>`;
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head>
+      <meta charset="UTF-8">
+      <title>FinanFlow – Relatório Anual ${selectedYear}</title>
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1e293b; background: #fff; padding: 24px; }
+        h1 { font-size: 22px; color: #1e3a8a; margin-bottom: 4px; }
+        .subtitle { color: #64748b; font-size: 12px; margin-bottom: 20px; }
+        .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+        .card-label { font-size: 10px; color: #64748b; margin-bottom: 4px; }
+        .card-value { font-size: 16px; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        th { background: #1e3a8a; color: white; padding: 7px 8px; text-align: left; white-space: nowrap; }
+        td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+        tr:nth-child(even) td { background: #f8fafc; }
+        @media print {
+          body { padding: 12px; }
+          .card { page-break-inside: avoid; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; }
+        }
+      </style>
+    </head><body>
+      <h1>FinanFlow – Relatório Anual ${selectedYear}</h1>
+      <p class="subtitle">Gerado em ${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})} às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</p>
+      <div class="cards">
+        <div class="card"><div class="card-label">Renda Total Anual</div><div class="card-value" style="color:#16a34a">${fmt(curStats.totalIncome)}</div></div>
+        <div class="card"><div class="card-label">Total Alocado</div><div class="card-value" style="color:#2563eb">${fmt(curStats.totalSpent)}</div></div>
+        <div class="card"><div class="card-label">Saldo Acumulado</div><div class="card-value" style="color:${curStats.totalBalance>=0?'#16a34a':'#dc2626'}">${fmt(curStats.totalBalance)}</div></div>
+        <div class="card"><div class="card-label">Taxa Inv+Poup Média</div><div class="card-value" style="color:#7c3aed">${curStats.avgSavingsRate.toFixed(1)}%</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Mês</th><th>Renda</th><th>Alocado</th><th>Despesas</th>
+          <th>Invest.</th><th>Conhec.</th><th>Doação</th><th>Poupança</th><th>Negócios</th><th>Saldo</th><th>Inv+Poup%</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>${totalsRow}</tfoot>
+      </table>
+    </body></html>`;
+
+    const w = window.open('', '_blank', 'width=1100,height=800');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => { w.focus(); w.print(); };
+  };
+
+
 
   const maxIncome = Math.max(...curStats.months.map((m) => m.totalIncome), 1);
 
@@ -226,10 +296,18 @@ export function AnnualView({ allMonths }: AnnualViewProps) {
           <button
             id="annual-export-csv-btn"
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-md shadow-blue-600/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all"
           >
             <Download className="w-3.5 h-3.5" />
-            Exportar CSV
+            CSV
+          </button>
+          <button
+            id="annual-export-pdf-btn"
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-md shadow-blue-600/20 transition-all"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Salvar PDF
           </button>
         </div>
       </div>
