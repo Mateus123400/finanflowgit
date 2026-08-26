@@ -34,6 +34,7 @@ import {
   deleteTransaction,
   saveTargets,
   fetchRewards,
+  deleteMonth,
 } from './lib/db';
 
 export default function App() {
@@ -67,6 +68,7 @@ export default function App() {
     type: 'transaction' | 'income';
     item: TransactionEntry | IncomeEntry;
   } | null>(null);
+  const [deleteMonthTarget, setDeleteMonthTarget] = useState<MonthData | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
 
   const showToast = (text: string, type: 'success' | 'info' = 'success') => {
@@ -255,6 +257,33 @@ export default function App() {
     setActiveTab('transactions');
   };
 
+  // ——— Deletar Mês ———
+  const handleDeleteMonth = async (monthToDelete: MonthData) => {
+    // Não permite apagar o único mês existente
+    if (months.length <= 1) {
+      showToast('Não é possível apagar o único mês existente.', 'info');
+      setDeleteMonthTarget(null);
+      return;
+    }
+
+    // Atualiza estado local: remove o mês e redireciona para o último disponível
+    const remaining = months.filter((m) => m.id !== monthToDelete.id);
+    setMonths(remaining);
+
+    // Se o mês apagado era o ativo, vai para o último disponível
+    if (activeMonthId === monthToDelete.id) {
+      setActiveMonthId(remaining[remaining.length - 1].id);
+      setActiveTab('dashboard');
+    }
+
+    if (user) {
+      await deleteMonth(user.id, monthToDelete.id).catch(console.error);
+    }
+
+    setDeleteMonthTarget(null);
+    showToast(`Mês excluído com sucesso.`);
+  };
+
   // ——— TELA DE LOADING ———
   if (authLoading) {
     return (
@@ -291,6 +320,7 @@ export default function App() {
         onSelectTab={setActiveTab}
         onSelectMonth={setActiveMonthId}
         onOpenNewMonthModal={() => setIsNewMonthModalOpen(true)}
+        onDeleteMonth={(month) => setDeleteMonthTarget(month)}
         onOpenTransactionModal={() => {
           setEditingTransaction(null);
           setDefaultTxCategory('despesas');
@@ -433,6 +463,16 @@ export default function App() {
             ? CATEGORIES_CONFIG[(deleteTarget.item as TransactionEntry).categoryId]?.name
             : 'Entrada de Renda'
         }
+      />
+
+      {/* Modal de confirmação: Excluir Mês */}
+      <DeleteConfirmModal
+        isOpen={!!deleteMonthTarget}
+        onClose={() => setDeleteMonthTarget(null)}
+        onConfirm={() => deleteMonthTarget && handleDeleteMonth(deleteMonthTarget)}
+        title="Excluir Mês"
+        itemDescription={deleteMonthTarget ? `${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][deleteMonthTarget.month - 1]} / ${deleteMonthTarget.year}` : ''}
+        itemCategoryName="Todos os lançamentos e rendas deste mês serão excluídos"
       />
     </div>
   );

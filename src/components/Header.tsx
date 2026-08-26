@@ -16,6 +16,7 @@ import {
   Trophy,
   Wallet,
   User,
+  Trash2,
 } from 'lucide-react';
 import { ActiveTab, MonthData } from '../types';
 import type { InsforgeUser } from '../lib/insforge';
@@ -29,6 +30,7 @@ interface HeaderProps {
   onSelectTab: (tab: ActiveTab) => void;
   onSelectMonth: (monthId: string) => void;
   onOpenNewMonthModal: () => void;
+  onDeleteMonth: (month: MonthData) => void;
   onOpenTransactionModal: () => void;
   onOpenIncomeModal: () => void;
   onExportJSON: () => void;
@@ -44,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectTab,
   onSelectMonth,
   onOpenNewMonthModal,
+  onDeleteMonth,
   onOpenTransactionModal,
   onOpenIncomeModal,
   onExportJSON,
@@ -186,6 +189,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Novo Mês</span>
+            </button>
+
+            {/* Botão Excluir Mês */}
+            <button
+              id="header-delete-month-btn"
+              onClick={() => onDeleteMonth(currentMonth)}
+              disabled={allMonths.length <= 1}
+              title={allMonths.length <= 1 ? 'Não é possível excluir o único mês' : `Excluir ${currentLabel}`}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Excluir Mês</span>
             </button>
           </div>
 

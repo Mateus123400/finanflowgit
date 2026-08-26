@@ -258,3 +258,41 @@ export async function deleteReward(rewardId: string): Promise<void> {
     .eq('id', rewardId);
   if (error) throw error;
 }
+
+// ============================================================
+// DELETE MONTH (cascade manual)
+// ============================================================
+
+export async function deleteMonth(userId: string, monthId: string): Promise<void> {
+  // 1. Apagar transações do mês
+  const { error: txErr } = await insforge.database
+    .from('transactions')
+    .delete()
+    .eq('month_id', monthId)
+    .eq('user_id', userId);
+  if (txErr) throw txErr;
+
+  // 2. Apagar rendas do mês
+  const { error: incErr } = await insforge.database
+    .from('incomes')
+    .delete()
+    .eq('month_id', monthId)
+    .eq('user_id', userId);
+  if (incErr) throw incErr;
+
+  // 3. Apagar metas do mês
+  const { error: tgtErr } = await insforge.database
+    .from('category_targets')
+    .delete()
+    .eq('month_id', monthId)
+    .eq('user_id', userId);
+  if (tgtErr) throw tgtErr;
+
+  // 4. Apagar o mês em si
+  const { error: mErr } = await insforge.database
+    .from('months')
+    .delete()
+    .eq('id', monthId)
+    .eq('user_id', userId);
+  if (mErr) throw mErr;
+}

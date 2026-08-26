@@ -409,18 +409,20 @@ function RewardCard({ reward, progress, onEdit, onDelete }: RewardCardProps) {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
             <button
               id={`edit-reward-${reward.id}`}
               onClick={onEdit}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              title="Editar recompensa"
             >
               <Edit3 className="w-3.5 h-3.5" />
             </button>
             <button
               id={`delete-reward-${reward.id}`}
               onClick={onDelete}
-              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
+              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
+              title="Excluir recompensa"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
