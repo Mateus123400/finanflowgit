@@ -10,6 +10,11 @@ import {
   CheckCircle2,
   Calendar,
   Landmark,
+  PiggyBank,
+  CircleDollarSign,
+  LineChart,
+  Coins,
+  ShieldAlert,
 } from 'lucide-react';
 import { AssetItem, AssetType } from '../types';
 import { getTodayDateInputString } from '../utils/formatters';
@@ -22,12 +27,17 @@ interface AssetModalProps {
 }
 
 const ASSET_TYPE_OPTIONS: { id: AssetType; label: string; icon: React.ReactNode; desc: string }[] = [
-  { id: 'imovel', label: 'Imóvel', icon: <Building2 className="w-4 h-4" />, desc: 'Casas, apartamentos, terrenos' },
-  { id: 'investimento', label: 'Investimentos', icon: <TrendingUp className="w-4 h-4" />, desc: 'Ações, FIIs, Tesouro, Cripto' },
-  { id: 'conta', label: 'Dinheiro / Contas', icon: <Wallet className="w-4 h-4" />, desc: 'Saldo bancário, reserva, CDB' },
-  { id: 'negocio', label: 'Negócio / Empresa', icon: <Briefcase className="w-4 h-4" />, desc: 'Participação societária, estoque' },
-  { id: 'veiculo', label: 'Veículo', icon: <Car className="w-4 h-4" />, desc: 'Carros, motos, embarcações' },
-  { id: 'outro', label: 'Outro Ativo', icon: <HelpCircle className="w-4 h-4" />, desc: 'Joias, relógios, bens de valor' },
+  { id: 'conta', label: 'Dinheiro / Contas', icon: <Wallet className="w-4 h-4" />, desc: 'Saldo em conta corrente, caixa' },
+  { id: 'poupanca', label: 'Poupança', icon: <PiggyBank className="w-4 h-4" />, desc: 'Caderneta de poupança' },
+  { id: 'investimento', label: 'Investimentos Gerais', icon: <TrendingUp className="w-4 h-4" />, desc: 'Fundos, CDBs, LCIs/LCAs' },
+  { id: 'acoes', label: 'Ações (Bolsa / B3 / Global)', icon: <LineChart className="w-4 h-4" />, desc: 'Ações brasileiras e internacionais' },
+  { id: 'fiis', label: 'FIIs (Fundos Imobiliários)', icon: <Building2 className="w-4 h-4" />, desc: 'Cotas de Fundos Imobiliários' },
+  { id: 'tesouro', label: 'Tesouro Direto / Renda Fixa', icon: <Landmark className="w-4 h-4" />, desc: 'Tesouro Selic, IPCA+, Prefixado' },
+  { id: 'cripto', label: 'Criptomoedas', icon: <Coins className="w-4 h-4" />, desc: 'Bitcoin, Ethereum, stablecoins' },
+  { id: 'imovel', label: 'Imóveis', icon: <Building2 className="w-4 h-4" />, desc: 'Casas, apartamentos, terrenos' },
+  { id: 'veiculo', label: 'Veículos', icon: <Car className="w-4 h-4" />, desc: 'Carros, motos, embarcações' },
+  { id: 'negocio', label: 'Negócios / Participações', icon: <Briefcase className="w-4 h-4" />, desc: 'Empresas, sociedades, quotas' },
+  { id: 'outro', label: 'Outros Ativos', icon: <HelpCircle className="w-4 h-4" />, desc: 'Joias, relógios, outros bens' },
 ];
 
 export const AssetModal: React.FC<AssetModalProps> = ({

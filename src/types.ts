@@ -145,11 +145,16 @@ export interface MonthSummary {
 // ─── PATRIMÔNIO (ATIVOS E PASSIVOS) ───────────────────────────
 
 export type AssetType =
-  | 'imovel'
-  | 'investimento'
   | 'conta'
-  | 'negocio'
+  | 'poupanca'
+  | 'investimento'
+  | 'acoes'
+  | 'fiis'
+  | 'tesouro'
+  | 'cripto'
+  | 'imovel'
   | 'veiculo'
+  | 'negocio'
   | 'outro';
 
 export type LiabilityType =
@@ -200,6 +205,32 @@ export interface NetWorthSummary {
   netWorth: number;
   assetsByType: Record<AssetType, number>;
   liabilitiesByType: Record<LiabilityType, number>;
+}
+
+export interface PatrimonioMonthEvolution {
+  monthId: string; // "YYYY-MM"
+  label: string; // "Janeiro 2026"
+  shortLabel: string; // "Jan/26"
+  year: number;
+  month: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  netWorth: number;
+  monthlyVariation: number; // R$ vs previous month
+  monthlyVariationPct: number; // % vs previous month
+  totalInvestedCumulative: number;
+  totalSavingsCumulative: number;
+}
+
+export interface PatrimonioEvolutionSummary {
+  points: PatrimonioMonthEvolution[];
+  initialNetWorth: number;
+  finalNetWorth: number;
+  currentNetWorth: number;
+  totalVariation: number; // Final - Initial
+  totalGrowthPercent: number; // ((Final - Initial) / Initial) * 100
+  latestMonthlyVariation: number;
+  latestMonthlyVariationPct: number;
 }
 
 // ─── NAVEGAÇÃO ─────────────────────────────────────────────────

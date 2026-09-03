@@ -21,6 +21,11 @@ import {
   BarChart3,
   Sparkles,
   Info,
+  PiggyBank,
+  LineChart as LineChartIcon,
+  Coins,
+  Scale,
+  Calendar,
 } from 'lucide-react';
 import {
   PieChart,
@@ -33,9 +38,21 @@ import {
   YAxis,
   Tooltip,
   Legend,
+  AreaChart,
+  Area,
+  Line,
 } from 'recharts';
-import { AssetItem, AssetType, LiabilityItem, LiabilityType, NetWorthSummary } from '../types';
-import { calculateNetWorthSummary } from '../utils/calculations';
+import {
+  AssetItem,
+  AssetType,
+  LiabilityItem,
+  LiabilityType,
+  MonthData,
+  IncomeActivity,
+  NetWorthSummary,
+  PatrimonioEvolutionSummary,
+} from '../types';
+import { calculateNetWorthSummary, calculatePatrimonioEvolution } from '../utils/calculations';
 import { formatCurrency, formatPercent, formatDateBR } from '../utils/formatters';
 import { AssetModal } from './AssetModal';
 import { LiabilityModal } from './LiabilityModal';
@@ -44,6 +61,8 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 interface PatrimonioViewProps {
   assets: AssetItem[];
   liabilities: LiabilityItem[];
+  allMonths?: MonthData[];
+  activities?: IncomeActivity[];
   onSaveAsset: (asset: AssetItem) => Promise<void>;
   onDeleteAsset: (assetId: string) => Promise<void>;
   onSaveLiability: (liability: LiabilityItem) => Promise<void>;
@@ -51,12 +70,17 @@ interface PatrimonioViewProps {
 }
 
 const ASSET_TYPE_CONFIG: Record<AssetType, { label: string; icon: React.ReactNode; color: string }> = {
-  imovel: { label: 'Imóvel', icon: <Building2 className="w-4 h-4" />, color: '#3b82f6' },
-  investimento: { label: 'Investimento', icon: <TrendingUp className="w-4 h-4" />, color: '#10b981' },
-  conta: { label: 'Dinheiro / Conta', icon: <Wallet className="w-4 h-4" />, color: '#06b6d4' },
-  negocio: { label: 'Negócio / Empresa', icon: <Briefcase className="w-4 h-4" />, color: '#f59e0b' },
-  veiculo: { label: 'Veículo', icon: <Car className="w-4 h-4" />, color: '#8b5cf6' },
-  outro: { label: 'Outro Ativo', icon: <HelpCircle className="w-4 h-4" />, color: '#64748b' },
+  conta: { label: 'Dinheiro / Contas', icon: <Wallet className="w-4 h-4" />, color: '#06b6d4' },
+  poupanca: { label: 'Poupança', icon: <PiggyBank className="w-4 h-4" />, color: '#eab308' },
+  investimento: { label: 'Investimentos Gerais', icon: <TrendingUp className="w-4 h-4" />, color: '#10b981' },
+  acoes: { label: 'Ações (B3 / Global)', icon: <LineChartIcon className="w-4 h-4" />, color: '#3b82f6' },
+  fiis: { label: 'FIIs (Imobiliários)', icon: <Building2 className="w-4 h-4" />, color: '#6366f1' },
+  tesouro: { label: 'Tesouro / Renda Fixa', icon: <Landmark className="w-4 h-4" />, color: '#14b8a6' },
+  cripto: { label: 'Criptomoedas', icon: <Coins className="w-4 h-4" />, color: '#f59e0b' },
+  imovel: { label: 'Imóveis', icon: <Building2 className="w-4 h-4" />, color: '#8b5cf6' },
+  veiculo: { label: 'Veículos', icon: <Car className="w-4 h-4" />, color: '#ec4899' },
+  negocio: { label: 'Negócios / Participações', icon: <Briefcase className="w-4 h-4" />, color: '#f97316' },
+  outro: { label: 'Outros Ativos', icon: <HelpCircle className="w-4 h-4" />, color: '#64748b' },
 };
 
 const LIABILITY_TYPE_CONFIG: Record<LiabilityType, { label: string; icon: React.ReactNode; color: string }> = {
@@ -70,12 +94,14 @@ const LIABILITY_TYPE_CONFIG: Record<LiabilityType, { label: string; icon: React.
 export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
   assets,
   liabilities,
+  allMonths = [],
+  activities = [],
   onSaveAsset,
   onDeleteAsset,
   onSaveLiability,
   onDeleteLiability,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'all' | 'assets' | 'liabilities'>('all');
+  const [activeSubTab, setActiveSubTab] = useState<'all' | 'assets' | 'liabilities' | 'evolution'>('all');
   const [assetFilter, setAssetFilter] = useState<AssetType | 'all'>('all');
   const [liabilityFilter, setLiabilityFilter] = useState<LiabilityType | 'all'>('all');
 
@@ -93,7 +119,12 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
     return calculateNetWorthSummary(assets, liabilities);
   }, [assets, liabilities]);
 
-  const { totalAssets, totalLiabilities, netWorth, assetsByType, liabilitiesByType } = summary;
+  const { totalAssets, totalLiabilities, netWorth, assetsByType } = summary;
+
+  // Evolução Patrimonial Histórica Real
+  const evolution: PatrimonioEvolutionSummary = useMemo(() => {
+    return calculatePatrimonioEvolution(allMonths, assets, liabilities, activities);
+  }, [allMonths, assets, liabilities, activities]);
 
   // Donut chart data para ativos
   const assetChartData = Object.entries(assetsByType)
@@ -106,7 +137,7 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
 
   // Bar chart comparativo Ativos vs Passivos
   const comparisonData = [
-    { name: 'Patrimônio', Ativos: totalAssets, Passivos: totalLiabilities },
+    { name: 'Posição Patrimonial', Ativos: totalAssets, Passivos: totalLiabilities, 'Patrimônio Líquido': Math.max(0, netWorth) },
   ];
 
   const filteredAssets = assets.filter((a) => assetFilter === 'all' || a.type === assetFilter);
@@ -131,7 +162,7 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Landmark className="w-5 h-5 text-emerald-400" />
-            Patrimônio Líquido & Balanço Pessoal
+            Patrimônio Líquido & Balanço Patrimonial
           </h2>
           <p className="text-sm text-slate-400 mt-0.5">
             Gestão consolidada de Ativos, Passivos, dívidas e evolução da sua riqueza real
@@ -258,18 +289,172 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
         </div>
       </div>
 
-      {/* ─── CARD EDUCATIVO: REGRA FUNDAMENTAL DO PATRIMÔNIO ─── */}
-      <div className="p-4 bg-slate-900/60 border border-slate-800/80 rounded-2xl flex items-start gap-3.5">
-        <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0 mt-0.5">
-          <Info className="w-4 h-4" />
+      {/* ─── CARD EDUCATIVO: REGRA DE OURO DOS APORTES VS PATRIMÔNIO ─── */}
+      <div className="p-4.5 bg-gradient-to-r from-slate-900 via-slate-900 to-blue-950/40 border border-blue-500/30 rounded-2xl shadow-lg flex items-start gap-4">
+        <div className="p-2.5 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30 shrink-0 mt-0.5">
+          <Scale className="w-5 h-5" />
         </div>
-        <div className="text-xs text-slate-300 space-y-1">
-          <span className="font-semibold text-white block">
-            Princípio Fundamental: Movimentação Financeira vs Composição Patrimonial
-          </span>
+        <div className="text-xs text-slate-300 space-y-1.5 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold text-white text-sm">
+              Regra de Ouro: Aporte vs Patrimônio Líquido
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 text-[10px] font-semibold border border-emerald-500/20">
+              Sem Dupla Contagem
+            </span>
+          </div>
           <p className="text-slate-400 leading-relaxed">
-            Transferir dinheiro da sua conta corrente para investimentos ou poupança <strong>não é uma despesa ou perda financeira</strong>. É apenas uma mudança na composição dos seus ativos: diminui o saldo em conta e aumenta o saldo investido, mantendo o seu patrimônio total intacto.
+            Quando você transfere <strong>R$ 3.000</strong> da conta corrente para investimentos ou poupança, o sistema reconhece a movimentação como:
+            <span className="text-white font-medium"> Conta (−R$ 3.000)</span> e <span className="text-white font-medium">Investimentos (+R$ 3.000)</span>.
+            O patrimônio líquido <strong>não é duplicado</strong> por esse aporte, mantendo sua precisão real.
+            Posteriormente, caso o ativo se valorize para R$ 3.500, o seu patrimônio crescerá em R$ 500 pela <em>valorização real</em> dos ativos.
           </p>
+        </div>
+      </div>
+
+      {/* ─── SEÇÃO DE EVOLUÇÃO PATRIMONIAL HISTÓRICA ─── */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              Evolução do Patrimônio Líquido
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Trajetória mês a mês construída exclusivamente a partir dos seus dados reais
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2 text-xs">
+              <span className="text-slate-400">Crescimento no Período:</span>
+              <span className={`font-bold flex items-center gap-0.5 ${evolution.totalGrowthPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {evolution.totalGrowthPercent >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                {formatPercent(evolution.totalGrowthPercent)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mini KPI Cards da Evolução */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Patrimônio Atual</span>
+            <span className="text-sm font-bold text-white mt-1 block">
+              {formatCurrency(evolution.currentNetWorth)}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Patrimônio Inicial</span>
+            <span className="text-sm font-bold text-slate-300 mt-1 block">
+              {formatCurrency(evolution.initialNetWorth)}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Patrimônio Final</span>
+            <span className="text-sm font-bold text-emerald-300 mt-1 block">
+              {formatCurrency(evolution.finalNetWorth)}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Variação no Mês</span>
+            <span className={`text-sm font-bold mt-1 block ${evolution.latestMonthlyVariation >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {evolution.latestMonthlyVariation >= 0 ? '+' : ''}{formatCurrency(evolution.latestMonthlyVariation)}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Variação Acumulada</span>
+            <span className={`text-sm font-bold mt-1 block ${evolution.totalVariation >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {evolution.totalVariation >= 0 ? '+' : ''}{formatCurrency(evolution.totalVariation)}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-850 rounded-xl border border-slate-750">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Taxa de Crescimento</span>
+            <span className={`text-sm font-bold mt-1 block ${evolution.totalGrowthPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {formatPercent(evolution.totalGrowthPercent)}
+            </span>
+          </div>
+        </div>
+
+        {/* Gráfico de Linha / Área da Evolução */}
+        <div className="h-64 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={evolution.points} margin={{ top: 10, right: 15, left: 10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="patrimonioGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="shortLabel" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <YAxis
+                stroke="#64748b"
+                tick={{ fill: '#94a3b8', fontSize: 10 }}
+                tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`}
+              />
+              <Tooltip
+                formatter={(val: any) => [formatCurrency(Number(val)), 'Patrimônio Líquido']}
+                labelFormatter={(label, payload) => {
+                  const pt = payload?.[0]?.payload;
+                  return pt?.label || label;
+                }}
+                contentStyle={{
+                  backgroundColor: '#0f172a',
+                  borderColor: '#334155',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="netWorth"
+                stroke="#10b981"
+                strokeWidth={3}
+                fillOpacity={1}
+                fill="url(#patrimonioGrad)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Tabela Resumida da Evolução Mês a Mês */}
+        <div className="overflow-x-auto border border-slate-800 rounded-xl">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-850 text-slate-400 uppercase text-[10px] font-semibold">
+              <tr>
+                <th className="px-4 py-2.5">Mês</th>
+                <th className="px-4 py-2.5 text-right">Patrimônio Líquido</th>
+                <th className="px-4 py-2.5 text-right">Variação Mensal</th>
+                <th className="px-4 py-2.5 text-right">Crescimento %</th>
+                <th className="px-4 py-2.5 text-right">Aportes Acumulados</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {evolution.points.map((pt) => (
+                <tr key={pt.monthId} className="hover:bg-slate-850/50 transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-white">{pt.label}</td>
+                  <td className="px-4 py-2.5 text-right font-bold text-emerald-300">
+                    {formatCurrency(pt.netWorth)}
+                  </td>
+                  <td className={`px-4 py-2.5 text-right font-semibold ${pt.monthlyVariation >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {pt.monthlyVariation >= 0 ? '+' : ''}{formatCurrency(pt.monthlyVariation)}
+                  </td>
+                  <td className={`px-4 py-2.5 text-right font-semibold ${pt.monthlyVariationPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {pt.monthlyVariationPct >= 0 ? '+' : ''}{pt.monthlyVariationPct.toFixed(1)}%
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-slate-400">
+                    {formatCurrency(pt.totalInvestedCumulative + pt.totalSavingsCumulative)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -316,14 +501,14 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
                 </ResponsiveContainer>
               </div>
 
-              <div className="space-y-2 text-xs">
+              <div className="space-y-1.5 text-xs max-h-56 overflow-y-auto custom-scrollbar pr-1">
                 {assetChartData.map((entry) => (
                   <div key={entry.name} className="flex items-center justify-between p-2 bg-slate-850 rounded-xl border border-slate-750">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                      <span className="font-medium text-slate-200">{entry.name}</span>
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="font-medium text-slate-200 line-clamp-1">{entry.name}</span>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <span className="font-bold text-white block">{formatCurrency(entry.value)}</span>
                       <span className="text-[10px] text-slate-400">
                         {formatPercent(totalAssets > 0 ? (entry.value / totalAssets) * 100 : 0)}
@@ -359,7 +544,7 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
                   formatter={(val: any) => [formatCurrency(Number(val)), '']}
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
                 />
-                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                 <Bar dataKey="Ativos" fill="#10b981" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="Passivos" fill="#f43f5e" radius={[8, 8, 0, 0]} />
               </BarChart>
@@ -382,7 +567,7 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Visão Geral ({assets.length + liabilities.length})
+              Todos ({assets.length + liabilities.length})
             </button>
             <button
               type="button"
@@ -431,7 +616,7 @@ export const PatrimonioView: React.FC<PatrimonioViewProps> = ({
 
             {filteredAssets.length === 0 ? (
               <div className="text-center py-8 bg-slate-900/40 rounded-2xl border border-slate-800 p-6 space-y-1 text-slate-500 text-xs">
-                Nenhum ativo cadastrado. Adicione seus imóveis, veículos, contas bancárias e investimentos.
+                Nenhum ativo cadastrado. Adicione seus imóveis, veículos, contas bancárias, ações, FIIs e tesouro.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

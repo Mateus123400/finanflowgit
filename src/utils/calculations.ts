@@ -1,13 +1,17 @@
 import {
   AssetItem,
+  AssetType,
   CategoryCalculation,
   CategoryId,
   IncomeActivity,
   LiabilityItem,
+  LiabilityType,
   MonthData,
   MonthSummary,
   NetWorthSummary,
   ActivityIncomeSummary,
+  PatrimonioEvolutionSummary,
+  PatrimonioMonthEvolution,
 } from '../types';
 import { CATEGORIES_CONFIG, CATEGORY_IDS, DEFAULT_TARGETS } from './constants';
 
@@ -239,16 +243,21 @@ export const calculateNetWorthSummary = (
   assets: AssetItem[],
   liabilities: LiabilityItem[]
 ): NetWorthSummary => {
-  const assetsByType: Record<string, number> = {
-    imovel: 0,
-    investimento: 0,
+  const assetsByType: Record<AssetType, number> = {
     conta: 0,
-    negocio: 0,
+    poupanca: 0,
+    investimento: 0,
+    acoes: 0,
+    fiis: 0,
+    tesouro: 0,
+    cripto: 0,
+    imovel: 0,
     veiculo: 0,
+    negocio: 0,
     outro: 0,
   };
 
-  const liabilitiesByType: Record<string, number> = {
+  const liabilitiesByType: Record<LiabilityType, number> = {
     financiamento: 0,
     emprestimo: 0,
     divida: 0,
@@ -276,8 +285,138 @@ export const calculateNetWorthSummary = (
     totalAssets,
     totalLiabilities,
     netWorth,
-    assetsByType: assetsByType as any,
-    liabilitiesByType: liabilitiesByType as any,
+    assetsByType,
+    liabilitiesByType,
+  };
+};
+
+export const calculatePatrimonioEvolution = (
+  months: MonthData[],
+  assets: AssetItem[],
+  liabilities: LiabilityItem[],
+  activities: IncomeActivity[] = []
+): PatrimonioEvolutionSummary => {
+  const netWorthSummary = calculateNetWorthSummary(assets, liabilities);
+  const currentNetWorth = netWorthSummary.netWorth;
+  const currentTotalAssets = netWorthSummary.totalAssets;
+  const currentTotalLiabilities = netWorthSummary.totalLiabilities;
+
+  const sortedMonths = [...months].sort((a, b) => a.id.localeCompare(b.id));
+
+  if (sortedMonths.length === 0) {
+    const now = new Date();
+    const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const curMonthIdx = now.getMonth();
+    const monthId = `${now.getFullYear()}-${String(curMonthIdx + 1).padStart(2, '0')}`;
+
+    const singlePoint: PatrimonioMonthEvolution = {
+      monthId,
+      label: `${MONTHS_FULL[curMonthIdx]} ${now.getFullYear()}`,
+      shortLabel: `${MONTHS_SHORT[curMonthIdx]}/${String(now.getFullYear()).slice(2)}`,
+      year: now.getFullYear(),
+      month: curMonthIdx + 1,
+      totalAssets: currentTotalAssets,
+      totalLiabilities: currentTotalLiabilities,
+      netWorth: currentNetWorth,
+      monthlyVariation: 0,
+      monthlyVariationPct: 0,
+      totalInvestedCumulative: 0,
+      totalSavingsCumulative: 0,
+    };
+
+    return {
+      points: [singlePoint],
+      initialNetWorth: currentNetWorth,
+      finalNetWorth: currentNetWorth,
+      currentNetWorth,
+      totalVariation: 0,
+      totalGrowthPercent: 0,
+      latestMonthlyVariation: 0,
+      latestMonthlyVariationPct: 0,
+    };
+  }
+
+  // Calculate monthly financial accumulation (investment + savings + balance generated)
+  const monthDeltas = sortedMonths.map((m) => {
+    const summary = calculateMonthSummary(m, activities);
+    const growth = summary.growthTotal; // investimento + poupanca
+    const balance = summary.remainingBalance;
+    const netProfit = summary.businessNetProfit;
+    // Total wealth added in this month = growth + remaining positive balance
+    const netAdded = growth + Math.max(0, balance) + (netProfit > 0 ? netProfit : 0);
+    return {
+      monthId: m.id,
+      year: m.year,
+      month: m.month,
+      growth,
+      netAdded,
+    };
+  });
+
+  // Calculate cumulative additions up to each month
+  const totalNetAdded = monthDeltas.reduce((acc, curr) => acc + curr.netAdded, 0);
+
+  // If we have registered assets/liabilities, align initial net worth before the recorded sequence
+  const initialBase = Math.max(0, currentNetWorth - totalNetAdded);
+
+  let runningNetWorth = initialBase;
+  let runningInvested = 0;
+  let runningSavings = 0;
+
+  const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const MONTHS_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  const points: PatrimonioMonthEvolution[] = sortedMonths.map((m, idx) => {
+    const summary = calculateMonthSummary(m, activities);
+    const invAmount = summary.categories.investimento?.actualAmount || 0;
+    const poupAmount = summary.categories.poupanca?.actualAmount || 0;
+    const delta = monthDeltas[idx].netAdded;
+
+    const previousNetWorth = runningNetWorth;
+    runningNetWorth += delta;
+    runningInvested += invAmount;
+    runningSavings += poupAmount;
+
+    // In the final month, snap to currentNetWorth if assets exist
+    if (idx === sortedMonths.length - 1 && currentTotalAssets > 0) {
+      runningNetWorth = currentNetWorth;
+    }
+
+    const monthlyVariation = runningNetWorth - previousNetWorth;
+    const monthlyVariationPct = previousNetWorth > 0 ? (monthlyVariation / previousNetWorth) * 100 : 0;
+
+    return {
+      monthId: m.id,
+      label: `${MONTHS_FULL[m.month - 1]} ${m.year}`,
+      shortLabel: `${MONTHS_SHORT[m.month - 1]}/${String(m.year).slice(2)}`,
+      year: m.year,
+      month: m.month,
+      totalAssets: runningNetWorth + currentTotalLiabilities,
+      totalLiabilities: currentTotalLiabilities,
+      netWorth: runningNetWorth,
+      monthlyVariation,
+      monthlyVariationPct,
+      totalInvestedCumulative: runningInvested,
+      totalSavingsCumulative: runningSavings,
+    };
+  });
+
+  const initialNetWorth = points[0]?.netWorth || currentNetWorth;
+  const finalNetWorth = points[points.length - 1]?.netWorth || currentNetWorth;
+  const totalVariation = finalNetWorth - initialNetWorth;
+  const totalGrowthPercent = initialNetWorth > 0 ? (totalVariation / initialNetWorth) * 100 : 0;
+  const latestPoint = points[points.length - 1];
+
+  return {
+    points,
+    initialNetWorth,
+    finalNetWorth,
+    currentNetWorth,
+    totalVariation,
+    totalGrowthPercent,
+    latestMonthlyVariation: latestPoint?.monthlyVariation || 0,
+    latestMonthlyVariationPct: latestPoint?.monthlyVariationPct || 0,
   };
 };
 

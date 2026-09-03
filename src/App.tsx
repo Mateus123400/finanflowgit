@@ -511,6 +511,8 @@ export default function App() {
           <PatrimonioView
             assets={assets}
             liabilities={liabilities}
+            allMonths={months}
+            activities={activities}
             onSaveAsset={handleSaveAsset}
             onDeleteAsset={handleDeleteAsset}
             onSaveLiability={handleSaveLiability}
@@ -540,7 +542,12 @@ export default function App() {
         )}
 
         {activeTab === 'annual' && (
-          <AnnualView allMonths={months} />
+          <AnnualView
+            allMonths={months}
+            assets={assets}
+            liabilities={liabilities}
+            activities={activities}
+          />
         )}
 
         {activeTab === 'rewards' && user && (
